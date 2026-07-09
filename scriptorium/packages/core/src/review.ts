@@ -7,6 +7,12 @@ export interface ReviewAnchor {
   contextAfter: string;
 }
 
+export interface ReviewHunkUndo {
+  status: HunkStatus;
+  workingAnchor: ReviewAnchor;
+  text: string;
+}
+
 export interface ReviewHunk {
   id: string;
   originalRange: TextRange;
@@ -15,6 +21,8 @@ export interface ReviewHunk {
   status: HunkStatus;
   originalText: string;
   proposedText: string;
+  currentText?: string;
+  undo?: ReviewHunkUndo;
 }
 
 export interface ReviewSession {
@@ -66,11 +74,41 @@ export function createReviewSession(input: CreateReviewSessionInput): ReviewSess
 }
 
 export function acceptHunk(session: ReviewSession, hunkId: string, workingText = session.workingText): ReviewSession {
-  return updateHunk(session, hunkId, { status: "accepted" }, workingText);
+  const hunk = session.hunks.find((item) => item.id === hunkId);
+  if (!hunk) {
+    return session;
+  }
+
+  const located = locateHunk(workingText, hunk);
+  if (!located) {
+    return updateHunk(session, hunkId, { status: "conflict" }, workingText);
+  }
+
+  return updateHunk(
+    session,
+    hunkId,
+    { status: "accepted", currentText: located.currentText, undo: createUndoState(hunk, workingText, located) },
+    workingText
+  );
 }
 
 export function keepEditedHunk(session: ReviewSession, hunkId: string, workingText = session.workingText): ReviewSession {
-  return updateHunk(session, hunkId, { status: "edited" }, workingText);
+  const hunk = session.hunks.find((item) => item.id === hunkId);
+  if (!hunk) {
+    return session;
+  }
+
+  const located = locateHunk(workingText, hunk);
+  if (!located) {
+    return updateHunk(session, hunkId, { status: "conflict" }, workingText);
+  }
+
+  return updateHunk(
+    session,
+    hunkId,
+    { status: "edited", currentText: located.currentText, undo: createUndoState(hunk, workingText, located) },
+    workingText
+  );
 }
 
 export function rejectHunk(session: ReviewSession, hunkId: string, workingText = session.workingText): ReviewSession {
@@ -85,7 +123,12 @@ export function rejectHunk(session: ReviewSession, hunkId: string, workingText =
   }
 
   const nextWorkingText = replaceRange(workingText, located.range, hunk.originalText);
-  return updateHunk(session, hunkId, { status: "rejected" }, nextWorkingText);
+  return updateHunk(
+    session,
+    hunkId,
+    { status: "rejected", currentText: hunk.originalText, undo: createUndoState(hunk, workingText, located) },
+    nextWorkingText
+  );
 }
 
 export function useAiVersion(session: ReviewSession, hunkId: string, workingText = session.workingText): ReviewSession {
@@ -100,12 +143,40 @@ export function useAiVersion(session: ReviewSession, hunkId: string, workingText
   }
 
   const nextWorkingText = replaceRange(workingText, located.range, hunk.proposedText);
-  return updateHunk(session, hunkId, { status: "pending" }, nextWorkingText);
+  return updateHunk(session, hunkId, { status: "pending", currentText: hunk.proposedText, undo: undefined }, nextWorkingText);
+}
+
+export function undoHunkAction(session: ReviewSession, hunkId: string, workingText = session.workingText): ReviewSession {
+  const hunk = session.hunks.find((item) => item.id === hunkId);
+  if (!hunk?.undo) {
+    return session;
+  }
+
+  const located = locateHunk(workingText, hunk) ?? locateText(workingText, hunk.originalText);
+  if (!located) {
+    const hunks = session.hunks.map((item) => (item.id === hunkId ? { ...item, status: "conflict" as HunkStatus } : item));
+    return { ...session, workingText, hunks };
+  }
+
+  const undo = hunk.undo;
+  const nextWorkingText = replaceRange(workingText, located.range, undo.text);
+  const hunks = session.hunks.map((item) =>
+    item.id === hunkId
+      ? {
+          ...item,
+          status: undo.status,
+          workingAnchor: undo.workingAnchor,
+          currentText: undo.text,
+          undo: undefined
+        }
+      : item
+  );
+  return refreshReviewSession({ ...session, workingText: nextWorkingText, hunks }, nextWorkingText);
 }
 
 export function refreshReviewSession(session: ReviewSession, workingText: string): ReviewSession {
   const hunks = session.hunks.map((hunk) => {
-    if (hunk.status === "accepted" || hunk.status === "rejected") {
+    if (isResolvedHunk(hunk)) {
       return hunk;
     }
 
@@ -114,24 +185,33 @@ export function refreshReviewSession(session: ReviewSession, workingText: string
       return { ...hunk, status: "conflict" as HunkStatus };
     }
 
-    if (located.currentText === hunk.proposedText && hunk.status !== "edited") {
-      return { ...hunk, status: "pending" as HunkStatus };
+    const refreshedHunk = {
+      ...hunk,
+      currentText: located.currentText,
+      workingAnchor: createWorkingAnchor(workingText, located.range)
+    };
+
+    if (located.currentText === hunk.proposedText) {
+      return { ...refreshedHunk, status: "pending" as HunkStatus };
     }
 
-    return { ...hunk, status: "edited" as HunkStatus };
+    return { ...refreshedHunk, status: "pending" as HunkStatus };
   });
 
   return { ...session, workingText, hunks };
 }
 
 export function locateHunk(workingText: string, hunk: ReviewHunk): LocateResult | null {
-  const exactProposed = locateText(workingText, hunk.proposedText);
-  if (exactProposed) {
-    return exactProposed;
+  for (const text of currentTextCandidates(hunk)) {
+    const exact = locateText(workingText, text);
+    if (exact) {
+      return exact;
+    }
   }
 
   const { contextBefore, contextAfter } = hunk.workingAnchor;
   const anchoredRanges: TextRange[] = [];
+  const expectedText = currentTextCandidates(hunk)[0] ?? hunk.proposedText;
 
   if (contextBefore && contextAfter) {
     const beforeIndexes = findAllIndexes(workingText, contextBefore);
@@ -145,11 +225,11 @@ export function locateHunk(workingText: string, hunk: ReviewHunk): LocateResult 
   } else if (contextBefore) {
     for (const beforeIndex of findAllIndexes(workingText, contextBefore)) {
       const start = beforeIndex + contextBefore.length;
-      anchoredRanges.push([start, start + hunk.proposedText.length]);
+      anchoredRanges.push([start, start + expectedText.length]);
     }
   } else if (contextAfter) {
     for (const afterIndex of findAllIndexes(workingText, contextAfter)) {
-      const start = Math.max(0, afterIndex - hunk.proposedText.length);
+      const start = Math.max(0, afterIndex - expectedText.length);
       anchoredRanges.push([start, afterIndex]);
     }
   }
@@ -167,6 +247,18 @@ export function locateHunk(workingText: string, hunk: ReviewHunk): LocateResult 
   };
 }
 
+function createWorkingAnchor(text: string, range: TextRange): ReviewAnchor {
+  const lines = splitLinesPreserve(text);
+  const offsets = buildOffsets(lines);
+  const startLine = lineIndexContainingOffset(offsets, range[0]);
+  const endLine = lineIndexAfterOffset(offsets, range[1]);
+
+  return {
+    contextBefore: lines.slice(Math.max(0, startLine - CONTEXT_LINES), startLine).join(""),
+    contextAfter: lines.slice(endLine, Math.min(lines.length, endLine + CONTEXT_LINES)).join("")
+  };
+}
+
 export function summarizeReview(session: ReviewSession): Record<HunkStatus, number> {
   return session.hunks.reduce<Record<HunkStatus, number>>(
     (summary, hunk) => {
@@ -177,6 +269,21 @@ export function summarizeReview(session: ReviewSession): Record<HunkStatus, numb
   );
 }
 
+function isResolvedHunk(hunk: ReviewHunk): boolean {
+  return hunk.status === "accepted" || hunk.status === "rejected" || (hunk.status === "edited" && Boolean(hunk.undo));
+}
+
+function currentTextCandidates(hunk: ReviewHunk): string[] {
+  const candidates = [
+    hunk.currentText,
+    hunk.status === "rejected" ? hunk.originalText : undefined,
+    hunk.status === "accepted" ? hunk.proposedText : undefined,
+    hunk.status === "edited" ? hunk.undo?.text : undefined,
+    hunk.proposedText
+  ];
+  return [...new Set(candidates.filter((text): text is string => Boolean(text)))];
+}
+
 function updateHunk(
   session: ReviewSession,
   hunkId: string,
@@ -185,6 +292,14 @@ function updateHunk(
 ): ReviewSession {
   const hunks = session.hunks.map((hunk) => (hunk.id === hunkId ? { ...hunk, ...patch } : hunk));
   return refreshReviewSession({ ...session, workingText, hunks }, workingText);
+}
+
+function createUndoState(hunk: ReviewHunk, workingText: string, located: LocateResult): ReviewHunkUndo {
+  return {
+    status: hunk.status,
+    workingAnchor: createWorkingAnchor(workingText, located.range),
+    text: located.currentText
+  };
 }
 
 function createLineHunks(originalText: string, proposedText: string): ReviewHunk[] {
@@ -207,19 +322,26 @@ function createLineHunks(originalText: string, proposedText: string): ReviewHunk
       return;
     }
 
-    const originalEndLine = pending.originalStart + pending.originalParts.length;
-    const proposedEndLine = pending.proposedStart + pending.proposedParts.length;
-    const originalTextChunk = pending.originalParts.join("");
-    const proposedTextChunk = pending.proposedParts.join("");
+    const hunkCount = Math.max(pending.originalParts.length, pending.proposedParts.length);
+    for (let index = 0; index < hunkCount; index += 1) {
+      const originalTextChunk = pending.originalParts[index] ?? "";
+      const proposedTextChunk = pending.proposedParts[index] ?? "";
+      if (originalTextChunk === proposedTextChunk) {
+        continue;
+      }
 
-    if (originalTextChunk !== proposedTextChunk) {
+      const originalStartLine = pending.originalStart + Math.min(index, pending.originalParts.length);
+      const originalEndLine = originalStartLine + (originalTextChunk ? 1 : 0);
+      const proposedStartLine = pending.proposedStart + Math.min(index, pending.proposedParts.length);
+      const proposedEndLine = proposedStartLine + (proposedTextChunk ? 1 : 0);
+
       hunks.push({
         id: `hunk-${hunks.length + 1}`,
-        originalRange: [originalOffsets[pending.originalStart], originalOffsets[originalEndLine]],
-        proposedRange: [proposedOffsets[pending.proposedStart], proposedOffsets[proposedEndLine]],
+        originalRange: [originalOffsets[originalStartLine], originalOffsets[originalEndLine]],
+        proposedRange: [proposedOffsets[proposedStartLine], proposedOffsets[proposedEndLine]],
         workingAnchor: {
           contextBefore: proposedLines
-            .slice(Math.max(0, pending.proposedStart - CONTEXT_LINES), pending.proposedStart)
+            .slice(Math.max(0, proposedStartLine - CONTEXT_LINES), proposedStartLine)
             .join(""),
           contextAfter: proposedLines
             .slice(proposedEndLine, Math.min(proposedLines.length, proposedEndLine + CONTEXT_LINES))
@@ -227,7 +349,8 @@ function createLineHunks(originalText: string, proposedText: string): ReviewHunk
         },
         status: "pending",
         originalText: originalTextChunk,
-        proposedText: proposedTextChunk
+        proposedText: proposedTextChunk,
+        currentText: proposedTextChunk
       });
     }
 
@@ -316,6 +439,22 @@ function buildOffsets(lines: string[]): number[] {
     offsets.push(offsets[offsets.length - 1] + line.length);
   }
   return offsets;
+}
+
+function lineIndexContainingOffset(offsets: number[], position: number): number {
+  let index = 0;
+  while (index + 1 < offsets.length && offsets[index + 1] <= position) {
+    index += 1;
+  }
+  return Math.min(index, Math.max(0, offsets.length - 1));
+}
+
+function lineIndexAfterOffset(offsets: number[], position: number): number {
+  let index = 0;
+  while (index < offsets.length && offsets[index] < position) {
+    index += 1;
+  }
+  return Math.min(index, Math.max(0, offsets.length - 1));
 }
 
 function locateText(workingText: string, needle: string): LocateResult | null {

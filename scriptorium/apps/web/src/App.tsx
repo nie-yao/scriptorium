@@ -3,7 +3,7 @@ import type { CompileResult, ProjectSummary, ProjectTreeNode } from "@scriptoriu
 import { ArrowLeft, FileCheck2, FolderOpen, FolderPlus, PanelRight, Play, Plus, Save, SplitSquareHorizontal, Upload } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FileTree } from "./components/FileTree";
-import { LatexEditor } from "./components/LatexEditor";
+import { LatexEditor, type HunkFocusRequest, type ReviewMarkMode } from "./components/LatexEditor";
 import { PdfPreview } from "./components/PdfPreview";
 import { ReviewPanel } from "./components/ReviewPanel";
 import { webFileSystemProvider, webLatexCompilerProvider, webProjectManagerProvider } from "./platform/webProviders";
@@ -27,6 +27,9 @@ export function App() {
   const [compileResult, setCompileResult] = useState<CompileResult | null>(null);
   const [pdfPath, setPdfPath] = useState<string | null>(null);
   const [pdfRevision, setPdfRevision] = useState(0);
+  const [reviewMarkMode, setReviewMarkMode] = useState<ReviewMarkMode>("marks");
+  const [hunkFocusRequest, setHunkFocusRequest] = useState<HunkFocusRequest | null>(null);
+  const [selectedHunkId, setSelectedHunkId] = useState<string | null>(null);
   const [notice, setNotice] = useState("Loading projects...");
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -41,6 +44,22 @@ export function App() {
   }, []);
 
   const reviewReady = useMemo(() => editorPath && proposedText.trim().length > 0, [editorPath, proposedText]);
+  const reviewSaveBlocked = useMemo(
+    () => session?.hunks.some((hunk) => hunk.status === "pending" || hunk.status === "conflict") ?? false,
+    [session]
+  );
+  const reviewReadyToFinalize = useMemo(
+    () => Boolean(session && session.hunks.length > 0 && !reviewSaveBlocked),
+    [reviewSaveBlocked, session]
+  );
+  const canSave = Boolean(editorPath && !reviewSaveBlocked && (dirty || reviewReadyToFinalize));
+  const saveTitle = !editorPath
+    ? "No editable file"
+    : reviewSaveBlocked
+      ? "Resolve all pending or conflict hunks before saving"
+      : reviewReadyToFinalize
+        ? "Save final Working text and finish review"
+        : "Save file";
   const selectedDirectory = useMemo(() => {
     if (!selectedPath) {
       return "";
@@ -107,6 +126,7 @@ export function App() {
     setProposedText("");
     setDirty(false);
     setSession(null);
+    setSelectedHunkId(null);
     setCompileResult(null);
     setPdfPath(null);
     setPdfRevision(0);
@@ -149,6 +169,7 @@ export function App() {
     setEditorText(content);
     setProposedText(makeDemoProposal(content));
     setSession(null);
+    setSelectedHunkId(null);
     setDirty(false);
     setNotice(`Opened ${path}`);
   }
@@ -157,10 +178,23 @@ export function App() {
     if (!activeProject || !editorPath) {
       return;
     }
+    if (reviewSaveBlocked) {
+      setRightTab("review");
+      setNotice("Resolve all pending or conflict hunks before saving.");
+      return;
+    }
+    if (!dirty && !reviewReadyToFinalize) {
+      return;
+    }
+
+    const finishedReview = Boolean(session);
     await webFileSystemProvider.writeTextFile(activeProject.projectId, editorPath, editorText);
     setOriginalText(editorText);
+    setProposedText(makeDemoProposal(editorText));
+    setSession(null);
+    setSelectedHunkId(null);
     setDirty(false);
-    setNotice(`Saved ${editorPath}`);
+    setNotice(finishedReview ? `Saved ${editorPath} and finished review session` : `Saved ${editorPath}`);
   }
 
   async function compile() {
@@ -238,6 +272,7 @@ export function App() {
     });
 
     setSession(nextSession);
+    setSelectedHunkId(null);
     setEditorText(nextSession.workingText);
     setDirty(true);
     setRightTab("review");
@@ -252,8 +287,17 @@ export function App() {
 
   function updateSession(nextSession: ReviewSession) {
     setSession(nextSession);
+    setSelectedHunkId((current) => (current && nextSession.hunks.some((hunk) => hunk.id === current) ? current : null));
     setEditorText(nextSession.workingText);
     setDirty(nextSession.workingText !== originalText);
+  }
+
+  function focusHunk(hunkId: string) {
+    setSelectedHunkId(hunkId);
+    setHunkFocusRequest((current) => ({
+      hunkId,
+      requestId: (current?.requestId ?? 0) + 1
+    }));
   }
 
   if (!activeProject) {
@@ -368,7 +412,7 @@ export function App() {
             <strong>{editorPath ? (dirty ? "Unsaved changes" : "Saved") : "No editable file"}</strong>
           </div>
           <div className="toolbar">
-            <button type="button" onClick={saveFile} disabled={!editorPath || !dirty}>
+            <button type="button" onClick={saveFile} disabled={!canSave} title={saveTitle}>
               <Save size={16} />
               Save
             </button>
@@ -391,6 +435,9 @@ export function App() {
               onChange={updateEditorText}
               disabled={!editorPath}
               reviewSession={session}
+              reviewMarkMode={reviewMarkMode}
+              onReviewMarkModeChange={setReviewMarkMode}
+              focusHunkRequest={hunkFocusRequest}
             />
           </section>
 
@@ -427,7 +474,12 @@ export function App() {
                     spellCheck={false}
                   />
                 </div>
-                <ReviewPanel session={session} onSessionChange={updateSession} />
+                <ReviewPanel
+                  session={session}
+                  selectedHunkId={selectedHunkId}
+                  onSessionChange={updateSession}
+                  onSelectHunk={focusHunk}
+                />
               </div>
             ) : null}
 
@@ -446,21 +498,6 @@ export function App() {
       </section>
     </main>
   );
-}
-
-function findFirstTex(node: ProjectTreeNode): string | null {
-  if (node.type === "file" && node.name.toLowerCase().endsWith(".tex")) {
-    return node.path;
-  }
-
-  for (const child of node.children ?? []) {
-    const found = findFirstTex(child);
-    if (found) {
-      return found;
-    }
-  }
-
-  return null;
 }
 
 function findNode(node: ProjectTreeNode | null, path: string): ProjectTreeNode | null {
@@ -496,6 +533,7 @@ function makeDemoProposal(text: string): string {
   return text
     .replace("A compact local demo", "A compact, reproducible local demo")
     .replace("review AI edits one hunk at a time", "review AI edits one deterministic hunk at a time")
+    .replace("s_{\\mathrm{draft}} = \\alpha x + \\beta", "s_{\\mathrm{polished}} = \\alpha x + \\beta + \\gamma")
     .replace("\\section{Draft}", "\\section{Polished Draft}");
 }
 

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Git Submit"
+  short_description: "Review, commit, merge, and push dev changes"
+  default_prompt: "Use $git-submit to review my dev changes, propose a commit message, and submit them to main."

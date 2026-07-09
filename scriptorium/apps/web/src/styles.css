@@ -361,8 +361,19 @@ button:disabled {
 }
 
 .toolbar {
+  align-items: center;
   display: flex;
   gap: 8px;
+}
+
+.markModeSelect {
+  background: #ffffff;
+  border: 1px solid #ccd2d8;
+  border-radius: 5px;
+  color: #26313a;
+  font-size: 12px;
+  min-height: 28px;
+  padding: 0 26px 0 8px;
 }
 
 .mainGrid {
@@ -380,9 +391,31 @@ button:disabled {
   overflow: hidden;
 }
 
+.editorShell {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+}
+
+.editorActionBar {
+  align-items: center;
+  background: #fbfaf8;
+  border-bottom: 1px solid #e2e0db;
+  display: flex;
+  gap: 8px;
+  min-height: 36px;
+  padding: 4px 10px;
+}
+
 .editorSurface,
 .editorSurface .cm-editor {
   height: 100%;
+}
+
+.editorSurface {
+  min-height: 0;
+  overflow: hidden;
 }
 
 .editorSurface .cm-editor {
@@ -401,12 +434,13 @@ button:disabled {
   color: #8a949c;
 }
 
-.editorSurface .cm-line.cm-hunkLineAdded {
-  background: #e6f4ea;
+.editorSurface .cm-selectionBackground,
+.editorSurface .cm-focused .cm-selectionBackground {
+  background: rgba(77, 132, 215, 0.32);
 }
 
-.editorSurface .cm-line.cm-hunkLineEdited {
-  background: #fff4d8;
+.editorSurface .cm-line.cm-hunkLineAdded {
+  background: rgba(230, 244, 234, 0.68);
 }
 
 .editorSurface .cm-hunkRemovedWidget {
@@ -424,9 +458,40 @@ button:disabled {
   width: 100%;
 }
 
-.editorSurface .cm-hunkRemovedWidget.edited {
-  background: #fff8e7;
-  color: #6b4a1c;
+.editorSurface .cm-hunkInlineChangedAddedShort {
+  color: #111111;
+  padding: 0;
+  text-decoration: underline;
+  text-decoration-color: #24633f;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 2px;
+}
+
+.editorSurface .cm-hunkInlineChangedRemovedShort {
+  color: #111111;
+  padding: 0;
+  text-decoration: underline;
+  text-decoration-color: #8f342d;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 2px;
+}
+
+.editorSurface .cm-hunkInlineChangedAddedWavy {
+  color: #111111;
+  padding: 0;
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+  text-decoration-color: #24633f;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+}
+
+.editorSurface .cm-hunkInlineChangedRemovedStrike {
+  color: #111111;
+  padding: 0;
+  text-decoration-line: line-through;
+  text-decoration-color: #8f342d;
+  text-decoration-thickness: 2px;
 }
 
 .rightPane {
@@ -548,7 +613,7 @@ button:disabled {
   border-bottom: 1px solid #d8dde2;
   display: grid;
   gap: 8px;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   padding: 10px;
 }
 
@@ -563,7 +628,7 @@ button:disabled {
 }
 
 .statusPill span {
-  color: #62707a;
+  color: #1d242b;
   font-size: 11px;
 }
 
@@ -572,8 +637,24 @@ button:disabled {
   font-size: 18px;
 }
 
-.statusPill.danger strong {
-  color: #a83d36;
+.statusPill.pending strong {
+  color: #174ea6;
+}
+
+.statusPill.accepted strong {
+  color: #24633f;
+}
+
+.statusPill.rejected strong {
+  color: #8f342d;
+}
+
+.statusPill.edited strong {
+  color: #765419;
+}
+
+.statusPill.conflict strong {
+  color: #8f342d;
 }
 
 .hunkList {
@@ -591,9 +672,31 @@ button:disabled {
   border: 1px solid #d8dde2;
   border-left: 4px solid #74969a;
   border-radius: 7px;
+  cursor: pointer;
   display: grid;
   gap: 10px;
   padding: 10px;
+}
+
+.hunkCard:hover {
+  border-color: #b9c4cc;
+  box-shadow: 0 1px 6px rgba(29, 36, 43, 0.08);
+}
+
+.hunkCard:focus-visible {
+  outline: 2px solid #4d90fe;
+  outline-offset: 2px;
+}
+
+.hunkCard.selected,
+.hunkCard.selected.accepted,
+.hunkCard.selected.rejected,
+.hunkCard.selected.edited,
+.hunkCard.selected.conflict {
+  background: #f7f9fb;
+  border-color: #b8c4cf;
+  border-left-color: #6f7f8f;
+  box-shadow: 0 1px 8px rgba(29, 36, 43, 0.12);
 }
 
 .hunkCard.accepted {
@@ -601,7 +704,7 @@ button:disabled {
 }
 
 .hunkCard.rejected {
-  border-left-color: #848b92;
+  border-left-color: #a83d36;
 }
 
 .hunkCard.edited {
@@ -618,14 +721,45 @@ button:disabled {
   justify-content: space-between;
 }
 
-.hunkCard header span {
+.statusBadge {
   background: #eef2f2;
+  border: 1px solid transparent;
   border-radius: 999px;
   color: #52616b;
   font-size: 11px;
   font-weight: 700;
   padding: 3px 8px;
   text-transform: uppercase;
+}
+
+.statusBadge.pending {
+  background: #e8f0fe;
+  border-color: #aecbfa;
+  color: #174ea6;
+}
+
+.statusBadge.accepted {
+  background: #e6f4ea;
+  border-color: #a8d5b8;
+  color: #24633f;
+}
+
+.statusBadge.rejected {
+  background: #fce8e6;
+  border-color: #e4aaa4;
+  color: #8f342d;
+}
+
+.statusBadge.edited {
+  background: #fff3d6;
+  border-color: #e1bf72;
+  color: #765419;
+}
+
+.statusBadge.conflict {
+  background: #fce8e6;
+  border-color: #e4aaa4;
+  color: #8f342d;
 }
 
 .diffBlock {
