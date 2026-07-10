@@ -1,0 +1,4 @@
+interface:
+  display_name: "Code Doc Cleanup"
+  short_description: "Audit repo changes, align docs, and clean dead code"
+  default_prompt: "Use $code-doc-cleanup to audit recent repo changes, update docs to match code, and remove clearly dead or duplicate files."

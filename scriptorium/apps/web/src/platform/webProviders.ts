@@ -3,8 +3,10 @@ import type {
   CompileResult,
   CreateProjectRequest,
   FileSystemProvider,
+  LatexCompilerProvider,
   OpenProjectRequest,
   ProjectManagerProvider,
+  ScriptoriumPlatform,
   ProjectSummary,
   ProjectTreeNode,
   ProjectWorkspace
@@ -88,7 +90,7 @@ export const webProjectManagerProvider: ProjectManagerProvider = {
   }
 };
 
-export const webLatexCompilerProvider = {
+export const webLatexCompilerProvider: LatexCompilerProvider = {
   async compile(input: CompileRequest): Promise<CompileResult> {
     return request<CompileResult>(`/api/projects/${encodeURIComponent(input.projectId)}/compile`, {
       method: "POST",
@@ -104,4 +106,10 @@ export const webLatexCompilerProvider = {
     );
     return result.log;
   }
+};
+
+export const webScriptoriumPlatform: ScriptoriumPlatform = {
+  projects: webProjectManagerProvider,
+  files: webFileSystemProvider,
+  latex: webLatexCompilerProvider
 };

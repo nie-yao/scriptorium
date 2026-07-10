@@ -7,8 +7,10 @@
     "build": "npm run build:core && vite build --config apps/web/vite.config.ts",
     "build:core": "tsc -p packages/core/tsconfig.json",
     "dev": "node scripts/dev.mjs",
-    "test": "npm run test:core",
-    "test:core": "npm run build:core && node packages/core/tests/review.test.mjs"
+    "test": "npm run test:core && npm run test:server",
+    "test:server": "npm run test:server:rust",
+    "test:server:rust": "cargo test -p scriptorium-local-server",
+    "test:core": "npm run build:core && node packages/core/tests/review.test.mjs && node packages/core/tests/latexNavigation.test.mjs && node packages/core/tests/bibliography.test.mjs"
   },
   "workspaces": [
     "apps/web",

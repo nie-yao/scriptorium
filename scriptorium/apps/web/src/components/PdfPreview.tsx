@@ -1,3 +1,4 @@
+import type { LatexCompilerProvider } from "@scriptorium/platform";
 import * as pdfjs from "pdfjs-dist";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { ChevronLeft, ChevronRight, RefreshCw, ZoomIn, ZoomOut } from "lucide-react";
@@ -9,10 +10,11 @@ interface PdfPreviewProps {
   projectId: string | null;
   pdfPath: string | null;
   revision: number;
+  getPdf: LatexCompilerProvider["getPdf"];
   onRefresh: () => void;
 }
 
-export function PdfPreview({ projectId, pdfPath, revision, onRefresh }: PdfPreviewProps) {
+export function PdfPreview({ projectId, pdfPath, revision, getPdf, onRefresh }: PdfPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [document, setDocument] = useState<PDFDocumentProxy | null>(null);
   const [pageNumber, setPageNumber] = useState(1);
@@ -30,13 +32,7 @@ export function PdfPreview({ projectId, pdfPath, revision, onRefresh }: PdfPrevi
     }
 
     setMessage("Loading PDF...");
-    fetch(`/api/projects/${encodeURIComponent(projectId)}/pdf?path=${encodeURIComponent(pdfPath)}&revision=${revision}`)
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error("PDF is not available");
-        }
-        return response.arrayBuffer();
-      })
+    getPdf(projectId, pdfPath)
       .then((buffer) => pdfjs.getDocument({ data: buffer }).promise)
       .then((pdf) => {
         if (!cancelled) {
@@ -53,7 +49,7 @@ export function PdfPreview({ projectId, pdfPath, revision, onRefresh }: PdfPrevi
     return () => {
       cancelled = true;
     };
-  }, [projectId, pdfPath, revision]);
+  }, [getPdf, projectId, pdfPath, revision]);
 
   useEffect(() => {
     let cancelled = false;

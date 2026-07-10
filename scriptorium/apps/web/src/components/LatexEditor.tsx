@@ -21,6 +21,11 @@ export interface HunkFocusRequest {
   requestId: number;
 }
 
+export interface NavigationFocusRequest {
+  line: number;
+  requestId: number;
+}
+
 interface LatexEditorProps {
   value: string;
   onChange: (value: string) => void;
@@ -29,6 +34,7 @@ interface LatexEditorProps {
   reviewMarkMode?: ReviewMarkMode;
   onReviewMarkModeChange?: (mode: ReviewMarkMode) => void;
   focusHunkRequest?: HunkFocusRequest | null;
+  navigationFocusRequest?: NavigationFocusRequest | null;
 }
 
 export function LatexEditor({
@@ -38,7 +44,8 @@ export function LatexEditor({
   reviewSession = null,
   reviewMarkMode = "marks",
   onReviewMarkModeChange,
-  focusHunkRequest = null
+  focusHunkRequest = null,
+  navigationFocusRequest = null
 }: LatexEditorProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -121,6 +128,18 @@ export function LatexEditor({
 
     focusHunkInEditor(view, reviewSession, focusHunkRequest.hunkId);
   }, [focusHunkRequest, reviewSession]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || !navigationFocusRequest) {
+      return;
+    }
+
+    const targetLine = Math.max(1, Math.min(view.state.doc.lines, navigationFocusRequest.line + 1));
+    const line = view.state.doc.line(targetLine);
+    view.dispatch({ selection: { anchor: line.from }, scrollIntoView: true });
+    view.focus();
+  }, [navigationFocusRequest]);
 
   return (
     <div className="editorShell">

@@ -140,7 +140,7 @@
 - 编辑器：CodeMirror 6。
 - PDF 预览：PDF.js。
 - 核心算法：独立 TypeScript package。
-- Web MVP 后端：Node.js + TypeScript 本地服务。
+- Web MVP 后端：Rust 本地服务。
 - 桌面端优先方案：Tauri。
 - 桌面端备选方案：Electron。
 
@@ -160,7 +160,7 @@ packages/platform/
   AiSuggestionProvider
 
 apps/
-  web-local-server
+  local-server-rs
   desktop-tauri (future)
 ```
 
@@ -168,7 +168,7 @@ apps/
 
 `ui` 层负责展示和交互，不应直接读写本地文件、调用 LaTeX 编译命令或直接访问 AI API。所有外部能力都必须通过 `platform` 层接口获得。
 
-`platform` 层定义应用能力边界。Web MVP 中可由本地 Node.js 服务实现；桌面化时由 Tauri commands、Tauri plugins 或 sidecar 实现；必要时可再增加 Electron 实现。
+`platform` 层定义应用能力边界。Web MVP 中由 Rust 本地服务实现；桌面化时由 Tauri commands、Tauri plugins 或 sidecar 实现；必要时可再增加 Electron 实现。
 
 核心平台接口建议包括：
 
@@ -533,7 +533,7 @@ latexmk -pdf main.tex
 
 当前实现会显示 stdout、stderr 和 `.log` 文本；跳转到错误行可作为后续增强。
 
-编译能力必须通过 `LatexCompilerProvider` 暴露给 UI。Web MVP 中由本地 Node.js 服务调用本地 `latexmk`；Tauri 桌面端中由 Tauri command 或 sidecar 调用同样的编译流程。
+编译能力必须通过 `LatexCompilerProvider` 暴露给 UI。Web MVP 中由 Rust 本地服务调用本地 `latexmk`；Tauri 桌面端中由 Tauri command 或 sidecar 调用同样的编译流程。
 
 ### 7.9 PDF 预览
 
@@ -587,7 +587,7 @@ latexmk -pdf main.tex
 
 ## 9. Web MVP 后端需求
 
-Web MVP 后端当前采用 Node.js ESM 本地服务，负责：
+Web MVP 后端当前采用 Rust 本地服务，负责：
 
 - 维护项目索引。
 - 创建新项目。
@@ -659,7 +659,7 @@ PDF 预览采用 PDF.js。
 
 前端应通过 platform adapter 访问外部能力：
 
-- Web MVP：调用本地 Node.js HTTP API。
+- Web MVP：调用本地 Rust HTTP API。
 - Tauri 桌面端：调用 Tauri commands 或插件。
 - Electron 备选端：调用 Electron preload 暴露的安全 IPC。
 

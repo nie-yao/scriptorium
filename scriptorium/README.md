@@ -15,7 +15,14 @@ Open:
 http://127.0.0.1:5173/
 ```
 
-The dev script builds `packages/core`, starts the local API on `http://127.0.0.1:4317/`, and starts Vite on `http://127.0.0.1:5173/`. The API is bound to localhost and limits project paths to the workspace root; `sample-project/` is seeded into the project list on first run.
+The dev script builds `packages/core`, starts the Rust local API on `http://127.0.0.1:4317/`, and starts Vite on `http://127.0.0.1:5173/`. The API is bound to localhost and limits project paths to the workspace root; `sample-project/` is seeded into the project list on first run. To use other local ports, set `SCRIPTORIUM_API_PORT` and `SCRIPTORIUM_WEB_PORT`, for example `SCRIPTORIUM_API_PORT=4318 SCRIPTORIUM_WEB_PORT=5174 npm run dev`.
+
+The Rust backend requires a local Rust toolchain:
+
+```bash
+rustup --version
+cargo --version
+```
 
 ## Current Flow
 
@@ -28,6 +35,12 @@ The dev script builds `packages/core`, starts the local API on `http://127.0.0.1
 7. Review red/green hunk decorations in the editor, focus hunks from the Review panel, and use `Accept`, `Reject`, `Keep Edit`, `Use AI`, or hunk-level `Undo`.
 8. Finish every pending hunk before saving the final Working text; then click `Compile` to run `latexmk`, preview the PDF with PDF.js, or inspect compile logs.
 
+## Reference formatting
+
+Open the **References** tab for a project `.bib` file to format entries into a reviewable `thebibliography` block. Scriptorium reads the selected `.bib` file and scans visible project `.tex` files to detect citations, protect against unsafe deduplication, and optionally remove uncited entries. The result targets `references.generated.tex` beside the source `.bib` by default, but no project file changes until the generated text is staged, reviewed, and saved.
+
+This workflow is intended for manual `thebibliography` projects. It does not rewrite `.bib` source files or BibTeX/Biber workflows.
+
 ## Current Limits
 
 - Project creation from the web UI asks for a project name and creates it under the workspace root. Opening an existing project also requires a path inside that root.
@@ -39,9 +52,9 @@ The dev script builds `packages/core`, starts the local API on `http://127.0.0.1
 ## Structure
 
 ```text
-packages/core/          deterministic diff, inline diff, hunk, and review-session logic
-packages/platform/      provider interfaces for projects, files, LaTeX compilation, and AI suggestions
-apps/web/               React + TypeScript + Vite frontend
-apps/web-local-server/  localhost Node API for projects, files, sessions, compile, logs, and PDFs
-sample-project/         runnable LaTeX project seeded into the local project index
+packages/core/             deterministic diff, inline diff, hunk, and review-session logic
+packages/platform/         provider interfaces for projects, files, and LaTeX compilation
+apps/web/                  React + TypeScript + Vite frontend
+apps/local-server-rs/      Rust localhost HTTP API for projects, files, sessions, compile, logs, and PDFs
+sample-project/            runnable LaTeX project seeded into the local project index
 ```

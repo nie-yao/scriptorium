@@ -1,8 +1,10 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const apiPort = process.env.SCRIPTORIUM_API_PORT ?? "4317";
+const webPort = process.env.SCRIPTORIUM_WEB_PORT ?? "5173";
 
 function run(command, args, options = {}) {
   const child = spawn(command, args, {
@@ -10,6 +12,9 @@ function run(command, args, options = {}) {
     stdio: "inherit",
     shell: process.platform === "win32",
     ...options
+  });
+  child.on("error", (error) => {
+    console.error(`${command} failed to start: ${error.message}`);
   });
   return child;
 }
@@ -29,13 +34,8 @@ function runAndWait(command, args) {
 
 await runAndWait("npm", ["run", "build:core"]);
 
-const server = run("node", [
-  "apps/web-local-server/server.mjs",
-  "--root",
-  "sample-project",
-  "--port",
-  "4317"
-]);
+assertCommand("cargo", "Rust backend selected, but cargo was not found. Install Rust from https://rustup.rs/ and retry.");
+const server = run("cargo", ["run", "-p", "scriptorium-local-server", "--", "--root", "sample-project", "--port", apiPort]);
 
 const viteBin = process.platform === "win32" ? "node_modules/.bin/vite.cmd" : "node_modules/.bin/vite";
 const web = run(viteBin, [
@@ -44,7 +44,7 @@ const web = run(viteBin, [
   "--host",
   "127.0.0.1",
   "--port",
-  "5173"
+  webPort
 ]);
 
 function stopAll() {
@@ -68,3 +68,14 @@ await Promise.race([
 ]);
 
 stopAll();
+
+function assertCommand(command, message) {
+  const result = spawnSync(command, ["--version"], {
+    cwd: root,
+    stdio: "ignore",
+    shell: process.platform === "win32"
+  });
+  if (result.error || result.status !== 0) {
+    throw new Error(message);
+  }
+}

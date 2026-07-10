@@ -1,4 +1,6 @@
 :root {
+  --corner-radius: 0;
+
   color: #1d242b;
   background: #f4f2ee;
   font-family:
@@ -19,15 +21,16 @@ body {
 }
 
 button,
+input,
 select,
 textarea {
+  border-radius: var(--corner-radius);
   font: inherit;
 }
 
 button {
   align-items: center;
   border: 1px solid #ccd2d8;
-  border-radius: 6px;
   background: #ffffff;
   color: #26313a;
   cursor: pointer;
@@ -119,7 +122,7 @@ button:disabled {
 .projectTable {
   background: #ffffff;
   border: 1px solid #d8dde2;
-  border-radius: 8px;
+  border-radius: var(--corner-radius);
   min-height: 0;
   overflow: auto;
 }
@@ -155,7 +158,7 @@ button:disabled {
   background: #ffffff;
   border: 0;
   border-bottom: 1px solid #eef0f0;
-  border-radius: 0;
+  border-radius: var(--corner-radius);
   color: #26313a;
   justify-content: stretch;
   min-height: 48px;
@@ -251,7 +254,7 @@ button:disabled {
   background: transparent;
   border: 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 0;
+  border-radius: var(--corner-radius);
   color: #dce5ea;
   justify-content: flex-start;
   min-height: 42px;
@@ -275,15 +278,79 @@ button:disabled {
 }
 
 .fileTree {
-  flex: 1 1 auto;
+  flex: 1 1 55%;
+  min-height: 120px;
   overflow: auto;
   padding: 10px 0;
+}
+
+.documentNavigation {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  display: grid;
+  flex: 0 1 45%;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 110px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.documentNavigationTitle {
+  align-items: center;
+  color: #b7c2c9;
+  display: flex;
+  font-size: 12px;
+  gap: 7px;
+  min-height: 38px;
+  padding: 0 12px;
+  text-transform: uppercase;
+}
+
+.navigationEntries {
+  min-height: 0;
+  overflow: auto;
+  padding: 0 0 8px;
+}
+
+.navigationRow {
+  background: transparent;
+  border: 0;
+  border-radius: var(--corner-radius);
+  color: #dce5ea;
+  justify-content: flex-start;
+  min-height: 31px;
+  padding-right: 10px;
+  width: 100%;
+}
+
+.navigationRow:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #ffffff;
+}
+
+.navigationRow.selected {
+  background: #e2f2ef;
+  color: #123d3f;
+}
+
+.navigationRow span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.navigationEmpty {
+  color: #b7c2c9;
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+  padding: 6px 12px;
 }
 
 .treeRow {
   background: transparent;
   border: 0;
-  border-radius: 0;
+  border-radius: var(--corner-radius);
   color: #dce5ea;
   justify-content: flex-start;
   min-height: 31px;
@@ -369,7 +436,7 @@ button:disabled {
 .markModeSelect {
   background: #ffffff;
   border: 1px solid #ccd2d8;
-  border-radius: 5px;
+  border-radius: var(--corner-radius);
   color: #26313a;
   font-size: 12px;
   min-height: 28px;
@@ -514,7 +581,7 @@ button:disabled {
 
 .tabBar button {
   border-bottom: 0;
-  border-radius: 6px 6px 0 0;
+  border-radius: var(--corner-radius);
   min-height: 35px;
 }
 
@@ -592,7 +659,7 @@ button:disabled {
 
 .proposedBox textarea {
   border: 1px solid #ccd2d8;
-  border-radius: 6px;
+  border-radius: var(--corner-radius);
   color: #26313a;
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
   font-size: 12px;
@@ -620,7 +687,7 @@ button:disabled {
 .statusPill {
   background: #ffffff;
   border: 1px solid #d8dde2;
-  border-radius: 6px;
+  border-radius: var(--corner-radius);
   display: grid;
   gap: 3px;
   min-width: 0;
@@ -671,7 +738,7 @@ button:disabled {
   background: #ffffff;
   border: 1px solid #d8dde2;
   border-left: 4px solid #74969a;
-  border-radius: 7px;
+  border-radius: var(--corner-radius);
   cursor: pointer;
   display: grid;
   gap: 10px;
@@ -724,7 +791,7 @@ button:disabled {
 .statusBadge {
   background: #eef2f2;
   border: 1px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--corner-radius);
   color: #52616b;
   font-size: 11px;
   font-weight: 700;
@@ -768,7 +835,7 @@ button:disabled {
 }
 
 .diffBlock pre {
-  border-radius: 6px;
+  border-radius: var(--corner-radius);
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
   font-size: 12px;
   line-height: 1.45;
@@ -837,4 +904,183 @@ button:disabled {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.referencePanel {
+  align-content: start;
+  display: grid;
+  gap: 12px;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 14px;
+}
+
+.referencePanelHeader h2 {
+  font-size: 16px;
+  margin: 0;
+}
+
+.referencePanelHeader p {
+  color: #64727c;
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 4px 0 0;
+}
+
+.referenceFields {
+  display: grid;
+  gap: 10px;
+}
+
+.referenceFields label,
+.referenceOptions label {
+  color: #52616b;
+  display: grid;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 5px;
+}
+
+.referenceFields input,
+.referenceFields select {
+  background: #ffffff;
+  border: 1px solid #ccd2d8;
+  color: #26313a;
+  min-height: 34px;
+  min-width: 0;
+  padding: 0 9px;
+  width: 100%;
+}
+
+.referenceFields > p {
+  color: #64727c;
+  font-size: 12px;
+  line-height: 1.45;
+  margin: -2px 0 0;
+}
+
+.referenceOptions {
+  background: #ffffff;
+  border: 1px solid #d8dde2;
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  min-width: 0;
+  padding: 10px;
+}
+
+.referenceOptions legend {
+  color: #52616b;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0 4px;
+}
+
+.referenceOptions label {
+  align-items: center;
+  color: #26313a;
+  display: flex;
+  font-weight: 400;
+  gap: 8px;
+}
+
+.referenceOptions input {
+  accent-color: #0b5459;
+  margin: 0;
+}
+
+.referenceActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.referenceActions button:first-child {
+  background: #0b5459;
+  border-color: #0b5459;
+  color: #ffffff;
+}
+
+.referenceActions button:first-child:hover:not(:disabled) {
+  background: #083f43;
+  border-color: #083f43;
+  color: #ffffff;
+}
+
+.referenceStats {
+  display: grid;
+  gap: 7px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+}
+
+.referenceStats div {
+  background: #ffffff;
+  border: 1px solid #d8dde2;
+  min-width: 0;
+  padding: 8px;
+}
+
+.referenceStats dt {
+  color: #64727c;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.referenceStats dd {
+  color: #1d242b;
+  font-size: 18px;
+  font-weight: 700;
+  margin: 3px 0 0;
+}
+
+.referenceDiagnostics {
+  display: grid;
+  gap: 7px;
+}
+
+.referenceDiagnostic {
+  border-left: 3px solid #8a949c;
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0;
+  padding: 8px 10px;
+}
+
+.referenceDiagnostic.error {
+  background: #fff0ec;
+  border-left-color: #a83d36;
+  color: #733126;
+}
+
+.referenceDiagnostic.warning {
+  background: #fff7e6;
+  border-left-color: #b5812f;
+  color: #765419;
+}
+
+.referenceOutput {
+  background: #ffffff;
+  border: 1px solid #d8dde2;
+  color: #26313a;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+  max-height: 360px;
+  overflow: auto;
+  padding: 10px;
+  white-space: pre-wrap;
+}
+
+.referenceEmpty {
+  border: 1px dashed #bcc7ce;
+  color: #64727c;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 18px;
+  text-align: center;
 }

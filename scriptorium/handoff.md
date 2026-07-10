@@ -26,7 +26,7 @@ Move that file together with this handoff when changing the project directory.
   - file/session persistence
 - AI is only responsible for generating proposed edits.
 - Design the architecture so the app can later become a cross-platform desktop app.
-- Prefer Tauri for the future macOS/Windows desktop shell.
+- Use Tauri + Rust for the macOS desktop shell, with the existing React UI retained.
 - Keep Electron only as a fallback if Tauri causes major compatibility issues.
 
 ## Architecture Direction
@@ -47,8 +47,8 @@ packages/platform/
   AiSuggestionProvider
 
 apps/
-  web-local-server
-  desktop-tauri (future)
+  local-server-rs
+  desktop-tauri (phase 3)
 ```
 
 The UI should not directly access Node.js, Tauri, Electron, the filesystem, `latexmk`, or AI APIs. It should call platform adapters instead.
@@ -71,13 +71,68 @@ The current Web MVP includes:
 
 The web UI currently uses a seeded demo proposal plus a manual Proposed text box. It does not call a real `AiSuggestionProvider` yet.
 
+## macOS Migration Progress
+
+The desktop migration is intentionally split into four stages:
+
+1. Abstract the React frontend's platform API layer.
+2. Provide the Web HTTP API through a Rust implementation.
+3. Add Tauri and migrate Rust capabilities from HTTP to Tauri command/IPC.
+4. Package the macOS `.app` and `.dmg`, including `latexmk` discovery, permissions, and project-directory access.
+
+Stages 1 and 2 are complete.
+
+### Stage 1: Platform API Abstraction
+
+- `packages/platform/` now exposes an aggregate `ScriptoriumPlatform` interface.
+- `apps/web/src/platform/runtimePlatform.ts` selects the current Web implementation at runtime.
+- `useScriptoriumApp` depends on the platform interface rather than direct HTTP assumptions.
+- `PdfPreview` receives PDF bytes through the platform API rather than calling `fetch` directly.
+
+This is the boundary the future Tauri adapter should implement. Do not reintroduce direct browser HTTP or filesystem calls into React components.
+
+### Stage 2: Rust HTTP Backend
+
+- Added the Cargo workspace and Rust crate at `apps/local-server-rs/`.
+- The Axum server preserves the Web API used by the React app: projects, tree/file operations, folders, uploads, moves, review sessions, LaTeX compilation, PDF output, and logs.
+- `latexmk -pdf -interaction=nonstopmode -halt-on-error` is executed by the Rust backend.
+- `npm run dev` starts the Rust backend.
+- `npm test` delegates server tests to `cargo test -p scriptorium-local-server`.
+- `Cargo.lock` is included for reproducible Rust dependency resolution; Rust build output (`target/`) is ignored.
+
+The following checks passed after installing Rust and LaTeX locally:
+
+- `cargo test -p scriptorium-local-server`: 7 Rust unit tests passed.
+- `npm test`: core tests and Rust backend tests passed.
+- `npm run build`: production frontend build passed.
+- HTTP smoke tests passed for health, text-file reads, review-session create/read, and PDF compilation.
+- A real `latexmk` run generated `sample-project/main.pdf` successfully.
+
+Local dependency status at handoff time:
+
+- `cargo 1.97.0`
+- `rustc 1.97.0`
+- `latexmk 4.83`
+
+The default local ports are API `4317` and frontend `5173`. They can be overridden without changing code:
+
+```bash
+SCRIPTORIUM_API_PORT=4318 SCRIPTORIUM_WEB_PORT=5174 npm run dev
+```
+
+During validation, a Rust instance was verified on `4318`/`5174`. Do not terminate an existing user-owned process merely to free the default ports.
+
 ## Important Constraint
 
 The user wants the review behavior to be algorithmic and reproducible. Do not rely on AI to decide whether a hunk is accepted, rejected, conflicted, or where it belongs after manual edits.
 
-## Known Gaps
+## Next Tasks
 
-Good next tasks, based on the current code rather than the original scaffold plan:
+The next migration task is Stage 3: create `apps/desktop-tauri/`, reuse the Rust backend modules in the Tauri process, and add a Tauri `ScriptoriumPlatform` adapter. Migrate operations incrementally from HTTP to `invoke` commands while keeping the Web implementation intact for regression comparison.
+
+After Stage 3, complete Stage 4: package and sign the macOS app as appropriate, handle `latexmk` path discovery, and configure macOS file-access permissions for user-selected project directories.
+
+Product gaps that remain independent of the desktop migration:
 
 - Wire review-session persistence into the frontend, or remove currently unused session persistence routes if persistence is deferred.
 - Implement a real `AiSuggestionProvider` adapter, while keeping manual Proposed text import available.
@@ -85,4 +140,3 @@ Good next tasks, based on the current code rather than the original scaffold pla
 - Add upload size limits in the local server.
 - Add direct PDF page input, fit-to-width, SyncTeX, and compile-log line navigation.
 - Add project/file rename, delete, remove-from-list, and project compile-entry editing.
-- Build the future Tauri shell by reusing the existing React UI, core algorithms, and platform interfaces.

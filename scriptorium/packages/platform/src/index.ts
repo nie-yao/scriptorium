@@ -84,19 +84,8 @@ export interface LatexCompilerProvider {
   getLog(projectId: string, path: string): Promise<string>;
 }
 
-export interface AiEditRequest {
-  projectId: string;
-  filePath: string;
-  instruction: string;
-  currentText: string;
-  contextFiles?: Array<{ path: string; text: string }>;
-}
-
-export interface AiEditResult {
-  proposedText: string;
-  explanation?: string;
-}
-
-export interface AiSuggestionProvider {
-  proposeEdit(input: AiEditRequest): Promise<AiEditResult>;
+export interface ScriptoriumPlatform {
+  projects: ProjectManagerProvider;
+  files: FileSystemProvider;
+  latex: LatexCompilerProvider;
 }
