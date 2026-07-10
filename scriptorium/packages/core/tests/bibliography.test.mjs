@@ -45,6 +45,47 @@ W.~Wang and S.~Li, A STUDY of Kalman FILTERS, \textit{IEEE Transactions on CONTR
 
 \end{thebibliography}`);
 
+const preservationResult = formatBibliography({
+  bibtex: String.raw`@article{preserve,
+  author = {Olfati-Saber, Reza and Eddy-Dilek, Carol},
+  title = {Over 6G Networks}, journal = {Test journal}, year = {2024}
+}`,
+  texSources: [],
+  options: { deduplicate: false, sort: false, removeUncited: false }
+});
+
+assert.equal(preservationResult.ok, true);
+assert.match(
+  preservationResult.outputText,
+  /R\.~Olfati-Saber and C\.~Eddy-Dilek, Over 6G networks, \\textit\{Test Journal\}, 2024\./
+);
+assert.doesNotMatch(preservationResult.outputText, /Olfati-saber|Eddy-dilek|6g/);
+
+const sortingResult = formatBibliography({
+  bibtex: String.raw`@article{wang-z,
+  author = {Wang, Zi}, title = {Wang Z}, journal = {Test journal}, year = {2023}
+}
+@article{sahin,
+  author = {Şahin, Alphan}, title = {Sahin}, journal = {Test journal}, year = {2020}
+}
+@article{wang-g,
+  author = {Wang, Gao}, title = {Wang G}, journal = {Test journal}, year = {2025}
+}
+@article{bartels,
+  author = {Bartels, Richard}, title = {Bartels}, journal = {Test journal}, year = {2024}
+}
+@article{wang-l,
+  author = {Wang, Lei}, title = {Wang L}, journal = {Test journal}, year = {2024}
+}`,
+  texSources: [],
+  options: { deduplicate: false, sort: true, removeUncited: false }
+});
+
+assert.deepEqual(
+  [...sortingResult.outputText.matchAll(/\\bibitem\{([^}]+)\}/g)].map((match) => match[1]),
+  ["bartels", "sahin", "wang-g", "wang-l", "wang-z"]
+);
+
 const citationScopeResult = formatBibliography({
   bibtex: String.raw`@article{kept,
   author = {Li, Si}, title = {Kept record}, journal = {Test journal}, year = {2024}

@@ -72,7 +72,7 @@ class EntryFormatError extends Error {
   }
 }
 
-const properNouns = ["Kalman", "Markov", "Bayesian", "Gaussian", "DoS", "IoT", "5G"];
+const properNouns = ["Kalman", "Markov", "Bayesian", "Gaussian", "DoS", "IoT", "5G", "6G"];
 const organizationNames = ["IEEE", "ACM", "CAA", "MIT"];
 const acronymPattern = /[A-Z]{2,}/;
 const mathPattern = /\$(?:[^$]|\{[^{}]+\})+\$/;
@@ -201,7 +201,7 @@ function formatEntry(entry: BibtexEntry): FormattedEntry {
     key: entry.key,
     code: `\\bibitem{${entry.key}}\n${authors}, ${formattedTitle}, \\textit{${container}}, ${details.join(", ")}.`,
     titleKey: normalizeTitle(title),
-    authorSortKey: firstAuthorSurname(author),
+    authorSortKey: firstAuthorSortKey(author),
     yearSortKey: yearSortKey(entry.fields.year)
   };
 }
@@ -255,7 +255,7 @@ function formatAuthors(value: string): string {
     if (initials.length === 0) {
       throw new EntryFormatError("invalid-author", `Invalid author format '${author}'; given name is empty.`);
     }
-    return [...initials, sentenceCapitalise(parts[0])].join("~");
+    return [...initials, formatSurname(parts[0])].join("~");
   });
 
   if (formatted.at(-1) === "et al.") {
@@ -409,9 +409,20 @@ function normalizeTitle(value: string): string {
   return value.replace(/\W+/g, "").toLowerCase();
 }
 
-function firstAuthorSurname(value: string): string {
-  const surname = value.split(" and ")[0]?.split(",")[0] ?? "";
-  return surname.replace(/[^a-zA-Z]/g, "").toLowerCase();
+function firstAuthorSortKey(value: string): string {
+  const firstAuthor = value.split(" and ")[0]?.trim() ?? "";
+  const parts = firstAuthor.split(",").map((part) => part.trim());
+  return normalizeSortText(parts.length === 2 ? `${parts[0]} ${parts[1]}` : firstAuthor);
+}
+
+function normalizeSortText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
 }
 
 function yearSortKey(value: string | undefined): number {
@@ -421,4 +432,8 @@ function yearSortKey(value: string | undefined): number {
 
 function sentenceCapitalise(value: string): string {
   return value ? `${value[0]?.toUpperCase() ?? ""}${value.slice(1).toLowerCase()}` : value;
+}
+
+function formatSurname(value: string): string {
+  return value.split("-").map((part) => sentenceCapitalise(part)).join("-");
 }
