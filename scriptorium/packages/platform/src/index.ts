@@ -13,6 +13,11 @@ export interface ProjectSummary {
   createdAt: string;
 }
 
+export interface UserSummary {
+  userId: string;
+  email: string;
+}
+
 export interface ProjectWorkspace {
   project: ProjectSummary;
   tree: ProjectTreeNode;
@@ -22,10 +27,6 @@ export interface CreateProjectRequest {
   name: string;
   parentPath?: string;
   template?: "blank" | "basic-paper";
-}
-
-export interface OpenProjectRequest {
-  rootPath: string;
 }
 
 export interface UploadFileRequest {
@@ -51,8 +52,14 @@ export interface CreateDirectoryRequest {
 export interface ProjectManagerProvider {
   listProjects(): Promise<ProjectSummary[]>;
   createProject(input: CreateProjectRequest): Promise<ProjectSummary>;
-  openExistingProject(input: OpenProjectRequest): Promise<ProjectSummary>;
   openProject(projectId: string): Promise<ProjectWorkspace>;
+}
+
+export interface AuthProvider {
+  currentUser(): Promise<UserSummary | null>;
+  register(email: string, password: string): Promise<UserSummary>;
+  signIn(email: string, password: string): Promise<UserSummary>;
+  signOut(): Promise<void>;
 }
 
 export interface FileSystemProvider {
@@ -85,6 +92,7 @@ export interface LatexCompilerProvider {
 }
 
 export interface ScriptoriumPlatform {
+  auth: AuthProvider;
   projects: ProjectManagerProvider;
   files: FileSystemProvider;
   latex: LatexCompilerProvider;

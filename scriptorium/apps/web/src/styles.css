@@ -50,6 +50,108 @@ button:disabled {
   opacity: 0.45;
 }
 
+.appLoading,
+.authScreen {
+  align-items: center;
+  background: #f4f2ee;
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+.appLoading {
+  color: #52616b;
+  font-size: 14px;
+}
+
+.authCard {
+  background: #ffffff;
+  border: 1px solid #d8dde2;
+  display: grid;
+  gap: 16px;
+  padding: 30px;
+  width: 390px;
+}
+
+.authBrand {
+  align-items: center;
+  color: #0b5459;
+  display: flex;
+  gap: 10px;
+}
+
+.authBrand div,
+.authIntro,
+.authCard label {
+  display: grid;
+  gap: 5px;
+}
+
+.authBrand strong {
+  color: #1d242b;
+}
+
+.authBrand span,
+.authIntro p,
+.authNotice {
+  color: #64727c;
+  font-size: 13px;
+}
+
+.authIntro h1,
+.authIntro p {
+  margin: 0;
+}
+
+.authIntro h1 {
+  font-size: 22px;
+}
+
+.authCard label {
+  color: #37434c;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.authCard input {
+  border: 1px solid #ccd2d8;
+  min-height: 38px;
+  padding: 0 10px;
+}
+
+.authError,
+.authNotice {
+  margin: 0;
+  min-height: 20px;
+}
+
+.authError {
+  color: #b33030;
+  font-size: 13px;
+}
+
+.authActions {
+  display: flex;
+  gap: 8px;
+}
+
+.authActions button:first-child {
+  background: #0b5459;
+  border-color: #0b5459;
+  color: #ffffff;
+}
+
+.accountEmail {
+  align-items: center;
+  color: #52616b;
+  display: inline-flex;
+  font-size: 13px;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .projectHome {
   background: #f4f2ee;
   display: grid;

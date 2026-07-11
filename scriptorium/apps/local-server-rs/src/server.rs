@@ -8,7 +8,7 @@ use std::{
 use axum::{
     body::Body,
     extract::{Path as AxumPath, Query, State},
-    http::{header, StatusCode},
+    http::{header, HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post},
     Json, Router,
@@ -16,6 +16,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    auth::{cookie_token, expired_session_cookie, session_cookie, AuthStore},
     config::ServerConfig,
     errors::{AppError, AppResult},
     latex_compiler::compile_latex,
@@ -23,18 +24,17 @@ use crate::{
         ensure_text_file, ensure_user_directory_path, ensure_user_entry_path, normalize_project_path, read_project_tree,
         resolve_inside_project, upload_file,
     },
-    project_index::ProjectIndex,
     review_sessions::{create_and_save_review_session, read_review_session, CreateReviewSessionRequest},
     types::{
-        CompileRequest, CreateDirectoryRequest, CreateProjectRequest, LogResponse, MoveEntryRequest, OkResponse,
-        OpenProjectRequest, ProjectWorkspace, ReadTextFileResponse, WriteTextFileRequest,
+        CompileRequest, CreateDirectoryRequest, CreateProjectRequest, CredentialsRequest, LogResponse, MoveEntryRequest,
+        OkResponse, ProjectWorkspace, ReadTextFileResponse, UserSummary, WriteTextFileRequest,
     },
 };
 
 #[derive(Clone)]
 struct AppState {
     config: ServerConfig,
-    project_index: Arc<Mutex<ProjectIndex>>,
+    auth: Arc<Mutex<AuthStore>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -51,20 +51,15 @@ struct HealthResponse {
 }
 
 pub async fn serve(config: ServerConfig) -> AppResult<()> {
-    let project_index = ProjectIndex::load(
-        config.default_project_root.clone(),
-        config.project_index_path.clone(),
-        config.workspace_root.clone(),
-    )?;
     let state = AppState {
         config: config.clone(),
-        project_index: Arc::new(Mutex::new(project_index)),
+        auth: Arc::new(Mutex::new(AuthStore::load(config.data_root.clone())?)),
     };
     let app = router(state);
     let address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), config.port);
 
     println!("Scriptorium Rust local API listening on http://127.0.0.1:{}", config.port);
-    println!("Workspace root: {}", config.workspace_root.display());
+    println!("User data root: {}", config.data_root.display());
 
     let listener = tokio::net::TcpListener::bind(address).await?;
     axum::serve(listener, app)
@@ -75,8 +70,11 @@ pub async fn serve(config: ServerConfig) -> AppResult<()> {
 fn router(state: AppState) -> Router {
     Router::new()
         .route("/api/health", get(health))
+        .route("/api/auth/me", get(current_user))
+        .route("/api/auth/register", post(register))
+        .route("/api/auth/login", post(sign_in))
+        .route("/api/auth/logout", post(sign_out))
         .route("/api/projects", get(list_projects).post(create_project))
-        .route("/api/projects/open", post(open_existing_project))
         .route("/api/projects/:project_id", get(open_project))
         .route("/api/projects/:project_id/tree", get(project_tree))
         .route("/api/projects/:project_id/file", get(read_text_file).put(write_text_file))
@@ -95,46 +93,83 @@ fn router(state: AppState) -> Router {
 }
 
 async fn health(State(state): State<AppState>) -> AppResult<Response> {
-    let projects = lock_index(&state)?.list_projects();
     json_response(HealthResponse {
         ok: true,
-        workspace_root: state.config.workspace_root.display().to_string(),
-        projects,
+        workspace_root: state.config.data_root.display().to_string(),
+        projects: Vec::new(),
     })
 }
 
-async fn list_projects(State(state): State<AppState>) -> AppResult<Response> {
-    json_response(lock_index(&state)?.list_projects())
+async fn current_user(State(state): State<AppState>, headers: HeaderMap) -> AppResult<Response> {
+    json_response(authenticated_user(&state, &headers)?)
 }
 
-async fn create_project(State(state): State<AppState>, Json(body): Json<CreateProjectRequest>) -> AppResult<Response> {
-    let project = lock_index(&state)?.create_project(body)?;
+async fn register(
+    State(state): State<AppState>,
+    Json(body): Json<CredentialsRequest>,
+) -> AppResult<Response> {
+    let email = body.email.unwrap_or_default();
+    let password = body.password.unwrap_or_default();
+    let mut auth = lock_auth(&state)?;
+    let user = auth.register(&email, &password)?;
+    let token = auth.sign_in(&email, &password)?;
+    json_response_with_cookie(user, session_cookie(&token, state.config.cookie_secure))
+}
+
+async fn sign_in(
+    State(state): State<AppState>,
+    Json(body): Json<CredentialsRequest>,
+) -> AppResult<Response> {
+    let email = body.email.unwrap_or_default();
+    let password = body.password.unwrap_or_default();
+    let mut auth = lock_auth(&state)?;
+    let token = auth.sign_in(&email, &password)?;
+    let user = auth.current_user(Some(&token))?;
+    json_response_with_cookie(user, session_cookie(&token, state.config.cookie_secure))
+}
+
+async fn sign_out(State(state): State<AppState>, headers: HeaderMap) -> AppResult<Response> {
+    let token = request_session_token(&headers);
+    lock_auth(&state)?.sign_out(token)?;
+    json_response_with_cookie(OkResponse { ok: true }, expired_session_cookie(state.config.cookie_secure))
+}
+
+async fn list_projects(State(state): State<AppState>, headers: HeaderMap) -> AppResult<Response> {
+    let user = authenticated_user(&state, &headers)?;
+    json_response(project_index_for_user(&state, &user)?.list_projects())
+}
+
+async fn create_project(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<CreateProjectRequest>,
+) -> AppResult<Response> {
+    let user = authenticated_user(&state, &headers)?;
+    let project = project_index_for_user(&state, &user)?.create_project(body)?;
     json_response(project)
 }
 
-async fn open_existing_project(State(state): State<AppState>, Json(body): Json<OpenProjectRequest>) -> AppResult<Response> {
-    let root_path = body.root_path.unwrap_or_default();
-    let project = lock_index(&state)?.add_existing_project(&root_path)?;
-    json_response(project)
-}
-
-async fn open_project(State(state): State<AppState>, AxumPath(project_id): AxumPath<String>) -> AppResult<Response> {
-    let project = project_for_id(&state, &project_id)?;
+async fn open_project(State(state): State<AppState>, headers: HeaderMap, AxumPath(project_id): AxumPath<String>) -> AppResult<Response> {
+    let user = authenticated_user(&state, &headers)?;
+    let project = project_for_user(&state, &user, &project_id)?;
     let tree = read_project_tree(Path::new(&project.root_path), "")?;
     json_response(ProjectWorkspace { project, tree })
 }
 
-async fn project_tree(State(state): State<AppState>, AxumPath(project_id): AxumPath<String>) -> AppResult<Response> {
-    let project = project_for_id(&state, &project_id)?;
+async fn project_tree(State(state): State<AppState>, headers: HeaderMap, AxumPath(project_id): AxumPath<String>) -> AppResult<Response> {
+    let user = authenticated_user(&state, &headers)?;
+    let project = project_for_user(&state, &user, &project_id)?;
     json_response(read_project_tree(Path::new(&project.root_path), "")?)
 }
 
 async fn read_text_file(
     State(state): State<AppState>,
+    headers: HeaderMap,
     AxumPath(project_id): AxumPath<String>,
     Query(query): Query<FilePathQuery>,
 ) -> AppResult<Response> {
-    let project = project_for_id(&state, &project_id)?;
+    let user = authenticated_user(&state, &headers)?;
+    let project = project_for_user(&state, &user, &project_id)?;
     let file_path = resolve_inside_project(Path::new(&project.root_path), &query.path)?;
     ensure_text_file(&file_path)?;
     let content = fs::read_to_string(file_path)?;
@@ -146,6 +181,7 @@ async fn read_text_file(
 
 async fn write_text_file(
     State(state): State<AppState>,
+    headers: HeaderMap,
     AxumPath(project_id): AxumPath<String>,
     Query(query): Query<FilePathQuery>,
     Json(body): Json<WriteTextFileRequest>,
@@ -157,7 +193,8 @@ async fn write_text_file(
         return Err(AppError::bad_request("Path must be relative to the project root"));
     }
     ensure_user_entry_path(&query.path)?;
-    let project = project_for_id(&state, &project_id)?;
+    let user = authenticated_user(&state, &headers)?;
+    let project = project_for_user(&state, &user, &project_id)?;
     let file_path = resolve_inside_project(Path::new(&project.root_path), &query.path)?;
     ensure_text_file(&file_path)?;
     if let Some(parent) = file_path.parent() {
@@ -171,10 +208,12 @@ async fn write_text_file(
 
 async fn create_folder(
     State(state): State<AppState>,
+    headers: HeaderMap,
     AxumPath(project_id): AxumPath<String>,
     Json(body): Json<CreateDirectoryRequest>,
 ) -> AppResult<Response> {
-    let project = project_for_id(&state, &project_id)?;
+    let user = authenticated_user(&state, &headers)?;
+    let project = project_for_user(&state, &user, &project_id)?;
     let folder_path = normalize_project_path(body.path.unwrap_or_default());
     ensure_user_directory_path(&folder_path)?;
     fs::create_dir(resolve_inside_project(Path::new(&project.root_path), &folder_path)?)?;
@@ -183,19 +222,23 @@ async fn create_folder(
 
 async fn upload_project_file(
     State(state): State<AppState>,
+    headers: HeaderMap,
     AxumPath(project_id): AxumPath<String>,
     Json(body): Json<crate::types::UploadFileRequest>,
 ) -> AppResult<Response> {
-    let project = project_for_id(&state, &project_id)?;
+    let user = authenticated_user(&state, &headers)?;
+    let project = project_for_user(&state, &user, &project_id)?;
     json_response(upload_file(Path::new(&project.root_path), body)?)
 }
 
 async fn move_project_entry(
     State(state): State<AppState>,
+    headers: HeaderMap,
     AxumPath(project_id): AxumPath<String>,
     Json(body): Json<MoveEntryRequest>,
 ) -> AppResult<Response> {
-    let project = project_for_id(&state, &project_id)?;
+    let user = authenticated_user(&state, &headers)?;
+    let project = project_for_user(&state, &user, &project_id)?;
     json_response(crate::project_files::move_entry(
         Path::new(&project.root_path),
         body.source_path.unwrap_or_default(),
@@ -206,27 +249,33 @@ async fn move_project_entry(
 
 async fn create_review_session_handler(
     State(state): State<AppState>,
+    headers: HeaderMap,
     AxumPath(project_id): AxumPath<String>,
     Json(body): Json<CreateReviewSessionRequest>,
 ) -> AppResult<Response> {
-    let project = project_for_id(&state, &project_id)?;
+    let user = authenticated_user(&state, &headers)?;
+    let project = project_for_user(&state, &user, &project_id)?;
     json_response(create_and_save_review_session(Path::new(&project.root_path), body)?)
 }
 
 async fn read_review_session_handler(
     State(state): State<AppState>,
+    headers: HeaderMap,
     AxumPath((project_id, session_id)): AxumPath<(String, String)>,
 ) -> AppResult<Response> {
-    let project = project_for_id(&state, &project_id)?;
+    let user = authenticated_user(&state, &headers)?;
+    let project = project_for_user(&state, &user, &project_id)?;
     json_response(read_review_session(Path::new(&project.root_path), &session_id)?)
 }
 
 async fn compile_project(
     State(state): State<AppState>,
+    headers: HeaderMap,
     AxumPath(project_id): AxumPath<String>,
     Json(body): Json<CompileRequest>,
 ) -> AppResult<Response> {
-    let project = project_for_id(&state, &project_id)?;
+    let user = authenticated_user(&state, &headers)?;
+    let project = project_for_user(&state, &user, &project_id)?;
     let entry = body.entry.unwrap_or_else(|| project.compile_entry.clone());
     let entry_path = resolve_inside_project(Path::new(&project.root_path), &entry)?;
     if entry_path.extension().and_then(|value| value.to_str()) != Some("tex") {
@@ -237,10 +286,12 @@ async fn compile_project(
 
 async fn read_pdf(
     State(state): State<AppState>,
+    headers: HeaderMap,
     AxumPath(project_id): AxumPath<String>,
     Query(query): Query<FilePathQuery>,
 ) -> AppResult<Response> {
-    let project = project_for_id(&state, &project_id)?;
+    let user = authenticated_user(&state, &headers)?;
+    let project = project_for_user(&state, &user, &project_id)?;
     let file_path = resolve_inside_project(Path::new(&project.root_path), &query.path)?;
     if file_path.extension().and_then(|value| value.to_str()) != Some("pdf") {
         return Err(AppError::bad_request("Only PDF files can be read through this endpoint"));
@@ -259,10 +310,12 @@ async fn read_pdf(
 
 async fn read_log(
     State(state): State<AppState>,
+    headers: HeaderMap,
     AxumPath(project_id): AxumPath<String>,
     Query(query): Query<FilePathQuery>,
 ) -> AppResult<Response> {
-    let project = project_for_id(&state, &project_id)?;
+    let user = authenticated_user(&state, &headers)?;
+    let project = project_for_user(&state, &user, &project_id)?;
     let file_path = resolve_inside_project(Path::new(&project.root_path), &query.path)?;
     if file_path.extension().and_then(|value| value.to_str()) != Some("log") {
         return Err(AppError::bad_request("Only .log files can be read through this endpoint"));
@@ -272,15 +325,27 @@ async fn read_log(
     })
 }
 
-fn project_for_id(state: &AppState, project_id: &str) -> AppResult<crate::types::ProjectSummary> {
-    lock_index(state)?.get_project(project_id)
+fn project_index_for_user(state: &AppState, user: &UserSummary) -> AppResult<crate::project_index::ProjectIndex> {
+    crate::project_index::ProjectIndex::load_for_user(user, &state.config)
 }
 
-fn lock_index(state: &AppState) -> AppResult<std::sync::MutexGuard<'_, ProjectIndex>> {
+fn project_for_user(state: &AppState, user: &UserSummary, project_id: &str) -> AppResult<crate::types::ProjectSummary> {
+    project_index_for_user(state, user)?.get_project(project_id)
+}
+
+fn lock_auth(state: &AppState) -> AppResult<std::sync::MutexGuard<'_, AuthStore>> {
     state
-        .project_index
+        .auth
         .lock()
-        .map_err(|_| AppError::internal("Project index lock is poisoned"))
+        .map_err(|_| AppError::internal("Authentication lock is poisoned"))
+}
+
+fn request_session_token(headers: &HeaderMap) -> Option<&str> {
+    headers.get(header::COOKIE).and_then(|value| value.to_str().ok()).and_then(|value| cookie_token(Some(value)))
+}
+
+fn authenticated_user(state: &AppState, headers: &HeaderMap) -> AppResult<UserSummary> {
+    lock_auth(state)?.current_user(request_session_token(headers))
 }
 
 fn json_response<T: Serialize>(value: T) -> AppResult<Response> {
@@ -290,6 +355,20 @@ fn json_response<T: Serialize>(value: T) -> AppResult<Response> {
         [
             (header::CONTENT_TYPE, "application/json; charset=utf-8"),
             (header::CACHE_CONTROL, "no-store"),
+        ],
+        Body::from(body),
+    )
+        .into_response())
+}
+
+fn json_response_with_cookie<T: Serialize>(value: T, cookie: String) -> AppResult<Response> {
+    let body = serde_json::to_vec(&value)?;
+    Ok((
+        StatusCode::OK,
+        [
+            (header::CONTENT_TYPE, "application/json; charset=utf-8"),
+            (header::CACHE_CONTROL, "no-store"),
+            (header::SET_COOKIE, cookie.as_str()),
         ],
         Body::from(body),
     )

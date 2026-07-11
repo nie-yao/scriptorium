@@ -1,12 +1,12 @@
-import { FileCheck2, FolderOpen, Plus } from "lucide-react";
+import { FileCheck2, LogOut, Plus } from "lucide-react";
 import type { ScriptoriumAppState } from "../app/useScriptoriumApp";
 
 type ProjectHomeProps = Pick<
   ScriptoriumAppState,
-  "createProject" | "notice" | "openExistingProject" | "openProject" | "projects"
+  "createProject" | "currentUser" | "notice" | "openProject" | "projects" | "signOut"
 >;
 
-export function ProjectHome({ createProject, notice, openExistingProject, openProject, projects }: ProjectHomeProps) {
+export function ProjectHome({ createProject, currentUser, notice, openProject, projects, signOut }: ProjectHomeProps) {
   return (
     <main className="projectHome">
       <header className="homeTopBar">
@@ -18,13 +18,14 @@ export function ProjectHome({ createProject, notice, openExistingProject, openPr
           </div>
         </div>
         <div className="homeActions">
-          <button type="button" onClick={openExistingProject}>
-            <FolderOpen size={16} />
-            Open Project
-          </button>
+          <span className="accountEmail">{currentUser?.email}</span>
           <button type="button" onClick={createProject}>
             <Plus size={16} />
             New Project
+          </button>
+          <button type="button" onClick={() => void signOut()}>
+            <LogOut size={16} />
+            Sign out
           </button>
         </div>
       </header>
@@ -54,7 +55,7 @@ export function ProjectHome({ createProject, notice, openExistingProject, openPr
           ) : (
             <div className="projectEmpty">
               <strong>No projects yet</strong>
-              <span>Create a project or open an existing LaTeX folder.</span>
+              <span>Create a private LaTeX project to get started.</span>
             </div>
           )}
         </div>

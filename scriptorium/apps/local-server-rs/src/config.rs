@@ -4,6 +4,8 @@ use crate::errors::{AppError, AppResult};
 
 #[derive(Clone, Debug)]
 pub struct ServerConfig {
+    pub cookie_secure: bool,
+    pub data_root: PathBuf,
     pub default_project_root: PathBuf,
     pub port: u16,
     pub project_index_path: PathBuf,
@@ -20,6 +22,9 @@ impl ServerConfig {
         let parsed = parse_args(args);
         let repo_root = env::current_dir().map_err(AppError::from)?;
         let workspace_root = repo_root.join(parsed.get("--workspace").map(String::as_str).unwrap_or("."));
+        let data_root = env::var_os("SCRIPTORIUM_DATA_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| workspace_root.join(".scriptorium").join("data"));
         let default_project_root = repo_root.join(parsed.get("--root").map(String::as_str).unwrap_or("sample-project"));
         let port = parsed
             .get("--port")
@@ -29,6 +34,8 @@ impl ServerConfig {
             .unwrap_or(4317);
 
         Ok(Self {
+            cookie_secure: env::var("SCRIPTORIUM_COOKIE_SECURE").ok().as_deref() == Some("true"),
+            data_root,
             default_project_root,
             port,
             project_index_path: workspace_root.join(".scriptorium").join("projects.json"),

@@ -4,16 +4,17 @@ import type {
   CreateProjectRequest,
   FileSystemProvider,
   LatexCompilerProvider,
-  OpenProjectRequest,
   ProjectManagerProvider,
   ScriptoriumPlatform,
   ProjectSummary,
   ProjectTreeNode,
-  ProjectWorkspace
+  ProjectWorkspace,
+  UserSummary
 } from "@scriptorium/platform";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
+    credentials: "same-origin",
     headers: init?.body ? { "Content-Type": "application/json", ...(init.headers ?? {}) } : init?.headers,
     ...init
   });
@@ -43,7 +44,9 @@ export const webFileSystemProvider: FileSystemProvider = {
     });
   },
   async readBinaryFile(projectId, path) {
-    const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/pdf?path=${encodeURIComponent(path)}`);
+    const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/pdf?path=${encodeURIComponent(path)}`, {
+      credentials: "same-origin"
+    });
     if (!response.ok) {
       throw new Error(await response.text());
     }
@@ -79,14 +82,36 @@ export const webProjectManagerProvider: ProjectManagerProvider = {
       body: JSON.stringify(input)
     });
   },
-  async openExistingProject(input: OpenProjectRequest): Promise<ProjectSummary> {
-    return request<ProjectSummary>("/api/projects/open", {
-      method: "POST",
-      body: JSON.stringify(input)
-    });
-  },
   async openProject(projectId: string): Promise<ProjectWorkspace> {
     return request<ProjectWorkspace>(`/api/projects/${encodeURIComponent(projectId)}`);
+  }
+};
+
+export const webAuthProvider = {
+  async currentUser(): Promise<UserSummary | null> {
+    const response = await fetch("/api/auth/me", { credentials: "same-origin" });
+    if (response.status === 401) {
+      return null;
+    }
+    if (!response.ok) {
+      throw new Error((await response.text()) || response.statusText);
+    }
+    return response.json() as Promise<UserSummary>;
+  },
+  async register(email: string, password: string): Promise<UserSummary> {
+    return request<UserSummary>("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify({ email, password })
+    });
+  },
+  async signIn(email: string, password: string): Promise<UserSummary> {
+    return request<UserSummary>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password })
+    });
+  },
+  async signOut(): Promise<void> {
+    await request<{ ok: true }>("/api/auth/logout", { method: "POST" });
   }
 };
 
@@ -109,6 +134,7 @@ export const webLatexCompilerProvider: LatexCompilerProvider = {
 };
 
 export const webScriptoriumPlatform: ScriptoriumPlatform = {
+  auth: webAuthProvider,
   projects: webProjectManagerProvider,
   files: webFileSystemProvider,
   latex: webLatexCompilerProvider

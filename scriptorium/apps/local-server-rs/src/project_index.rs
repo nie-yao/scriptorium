@@ -8,9 +8,10 @@ use serde::{Deserialize, Serialize};
 use sha1::{Digest, Sha1};
 
 use crate::{
+    config::ServerConfig,
     errors::{AppError, AppResult},
     project_files::{resolve_inside_workspace, sanitize_file_name, unique_path},
-    types::{CreateProjectRequest, ProjectSummary},
+    types::{CreateProjectRequest, ProjectSummary, UserSummary},
 };
 
 #[derive(Debug)]
@@ -26,10 +27,11 @@ struct ProjectIndexFile {
 }
 
 impl ProjectIndex {
-    pub fn load(default_project_root: PathBuf, project_index_path: PathBuf, workspace_root: PathBuf) -> AppResult<Self> {
+    pub fn load(project_index_path: PathBuf, workspace_root: PathBuf) -> AppResult<Self> {
         if let Some(parent) = project_index_path.parent() {
             fs::create_dir_all(parent)?;
         }
+        fs::create_dir_all(&workspace_root)?;
 
         let projects = match fs::read_to_string(&project_index_path)
             .ok()
@@ -37,13 +39,11 @@ impl ProjectIndex {
         {
             Some(parsed) => parsed.projects,
             None => {
-                let initial_project = make_project_summary(&default_project_root, path_basename(&default_project_root));
-                fs::create_dir_all(default_project_root.join(".latex-review").join("sessions"))?;
                 let content = serde_json::to_string_pretty(&ProjectIndexFile {
-                    projects: vec![initial_project.clone()],
+                    projects: Vec::new(),
                 })?;
                 fs::write(&project_index_path, content)?;
-                vec![initial_project]
+                Vec::new()
             }
         };
 
@@ -52,6 +52,12 @@ impl ProjectIndex {
             projects,
             workspace_root,
         })
+    }
+
+    pub fn load_for_user(user: &UserSummary, config: &ServerConfig) -> AppResult<Self> {
+        let user_root = config.data_root.join("users").join(&user.user_id);
+        let project_root = user_root.join("projects");
+        Self::load(user_root.join("projects.json"), project_root)
     }
 
     pub fn list_projects(&self) -> Vec<ProjectSummary> {
@@ -78,28 +84,12 @@ impl ProjectIndex {
         Ok(project)
     }
 
-    pub fn add_existing_project(&mut self, root_path: &str) -> AppResult<ProjectSummary> {
-        if root_path.is_empty() {
-            return Err(AppError::bad_request("Expected JSON body with rootPath"));
-        }
-
-        let absolute_root = resolve_inside_workspace(&self.workspace_root, root_path)?;
-        if !fs::metadata(&absolute_root)?.is_dir() {
-            return Err(AppError::internal("Project root must be a directory"));
-        }
-
-        let project = make_project_summary(&absolute_root, path_basename(&absolute_root));
-        self.upsert_and_save(project.clone())?;
-        fs::create_dir_all(absolute_root.join(".latex-review").join("sessions"))?;
-        Ok(project)
-    }
-
     pub fn get_project(&self, project_id: &str) -> AppResult<ProjectSummary> {
         self.projects
             .iter()
             .find(|project| project.project_id == project_id)
             .cloned()
-            .ok_or_else(|| AppError::internal("Unknown project"))
+            .ok_or_else(|| AppError::not_found("Project not found"))
     }
 
     fn upsert_and_save(&mut self, project: ProjectSummary) -> AppResult<()> {
@@ -137,12 +127,6 @@ fn create_project_id(root_path: &Path) -> String {
     hex::encode(digest)[..12].to_string()
 }
 
-fn path_basename(path: &Path) -> String {
-    path.file_name()
-        .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_else(|| path.display().to_string())
-}
-
 fn default_main_tex(safe_name: &str) -> String {
     vec![
         "\\documentclass{article}".to_string(),
@@ -171,14 +155,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn creates_initial_index_and_projects() {
+    fn creates_projects_inside_user_workspace() {
         let temp = tempdir().unwrap();
-        let project_root = temp.path().join("sample-project");
-        fs::create_dir_all(&project_root).unwrap();
         let index_path = temp.path().join(".scriptorium").join("projects.json");
 
-        let mut index = ProjectIndex::load(project_root.clone(), index_path, temp.path().to_path_buf()).unwrap();
-        assert_eq!(index.list_projects().len(), 1);
+        let mut index = ProjectIndex::load(index_path, temp.path().join("projects")).unwrap();
+        assert!(index.list_projects().is_empty());
 
         let created = index
             .create_project(CreateProjectRequest {
@@ -193,16 +175,25 @@ mod tests {
     }
 
     #[test]
-    fn opens_existing_project_inside_workspace() {
+    fn users_receive_separate_project_roots_and_indexes() {
         let temp = tempdir().unwrap();
-        let project_root = temp.path().join("sample-project");
-        fs::create_dir_all(&project_root).unwrap();
-        let index_path = temp.path().join(".scriptorium").join("projects.json");
+        let config = ServerConfig {
+            cookie_secure: false,
+            data_root: temp.path().join("data"),
+            default_project_root: temp.path().join("sample-project"),
+            port: 4317,
+            project_index_path: temp.path().join("unused-projects.json"),
+            repo_root: temp.path().to_path_buf(),
+            workspace_root: temp.path().to_path_buf(),
+        };
+        let alice = UserSummary { user_id: "alice".into(), email: "alice@example.com".into() };
+        let bob = UserSummary { user_id: "bob".into(), email: "bob@example.com".into() };
+        let created = ProjectIndex::load_for_user(&alice, &config)
+            .unwrap()
+            .create_project(CreateProjectRequest { name: Some("Paper".into()), parent_path: None, template: Some("blank".into()) })
+            .unwrap();
 
-        let mut index = ProjectIndex::load(project_root.clone(), index_path, temp.path().to_path_buf()).unwrap();
-        let opened = index.add_existing_project("sample-project").unwrap();
-
-        assert_eq!(opened.root_path, project_root.display().to_string());
-        assert_eq!(index.list_projects().len(), 1);
+        assert!(Path::new(&created.root_path).starts_with(config.data_root.join("users/alice/projects")));
+        assert!(ProjectIndex::load_for_user(&bob, &config).unwrap().get_project(&created.project_id).is_err());
     }
 }

@@ -8,7 +8,7 @@ import {
   type LatexNavigationEntry,
   type ReviewSession
 } from "@scriptorium/core";
-import type { CompileResult, ProjectSummary, ProjectTreeNode, ScriptoriumPlatform } from "@scriptorium/platform";
+import type { CompileResult, ProjectSummary, ProjectTreeNode, ScriptoriumPlatform, UserSummary } from "@scriptorium/platform";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { HunkFocusRequest, NavigationFocusRequest, ReviewMarkMode } from "../components/LatexEditor";
 import { getScriptoriumPlatform } from "../platform/runtimePlatform";
@@ -27,10 +27,13 @@ import {
 export type RightTab = "pdf" | "review" | "references" | "logs";
 
 export function useScriptoriumApp(platform: ScriptoriumPlatform = getScriptoriumPlatform()) {
+  const auth = platform.auth;
   const projectManager = platform.projects;
   const fileSystem = platform.files;
   const latexCompiler = platform.latex;
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
+  const [currentUser, setCurrentUser] = useState<UserSummary | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [activeProject, setActiveProject] = useState<ProjectSummary | null>(null);
   const [tree, setTree] = useState<ProjectTreeNode | null>(null);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
@@ -62,14 +65,44 @@ export function useScriptoriumApp(platform: ScriptoriumPlatform = getScriptorium
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
+    let active = true;
+    auth
+      .currentUser()
+      .then((user) => {
+        if (!active) {
+          return;
+        }
+        setCurrentUser(user);
+        setNotice(user ? "Loading your projects..." : "Sign in to access your projects");
+      })
+      .catch((error) => {
+        if (active) {
+          setNotice(error instanceof Error ? error.message : "Failed to check sign-in status");
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setAuthLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [auth]);
+
+  useEffect(() => {
+    if (!currentUser) {
+      setProjects([]);
+      return;
+    }
     projectManager
       .listProjects()
       .then((projectList) => {
         setProjects(projectList);
-        setNotice(projectList.length > 0 ? "Select a project" : "Create or open a project");
+        setNotice(projectList.length > 0 ? "Select a project" : "Create your first project");
       })
       .catch((error) => setNotice(error instanceof Error ? error.message : "Failed to load projects"));
-  }, [projectManager]);
+  }, [currentUser, projectManager]);
 
   const reviewReady = useMemo(() => Boolean(editorPath && proposedText.trim().length > 0), [editorPath, proposedText]);
   const reviewSaveBlocked = useMemo(
@@ -148,15 +181,28 @@ export function useScriptoriumApp(platform: ScriptoriumPlatform = getScriptorium
     await openProject(project.projectId, false);
   }
 
-  async function openExistingProject() {
-    const rootPath = window.prompt("Project folder path", "sample-project");
-    if (!rootPath?.trim()) {
-      return;
-    }
-    const project = await projectManager.openExistingProject({ rootPath: rootPath.trim() });
-    const projectList = await projectManager.listProjects();
-    setProjects(projectList);
-    await openProject(project.projectId, false);
+  async function signIn(email: string, password: string) {
+    const user = await auth.signIn(email, password);
+    resetWorkspaceState();
+    setCurrentUser(user);
+    setNotice(`Signed in as ${user.email}`);
+  }
+
+  async function register(email: string, password: string) {
+    const user = await auth.register(email, password);
+    resetWorkspaceState();
+    setCurrentUser(user);
+    setNotice(`Account created for ${user.email}`);
+  }
+
+  async function signOut() {
+    await auth.signOut();
+    setCurrentUser(null);
+    setProjects([]);
+    setActiveProject(null);
+    setTree(null);
+    resetWorkspaceState();
+    setNotice("Signed out");
   }
 
   function returnToProjects() {
@@ -471,12 +517,14 @@ export function useScriptoriumApp(platform: ScriptoriumPlatform = getScriptorium
 
   return {
     activeProject,
+    authLoading,
     canSave,
     compile,
     compileResult,
     createFolder,
     createProject,
     createSession,
+    currentUser,
     dirty,
     editorPath,
     editorText,
@@ -489,7 +537,6 @@ export function useScriptoriumApp(platform: ScriptoriumPlatform = getScriptorium
     navigationEntries,
     navigationFocusRequest,
     notice,
-    openExistingProject,
     openProject,
     openProjectFile,
     pdfPath,
@@ -520,6 +567,9 @@ export function useScriptoriumApp(platform: ScriptoriumPlatform = getScriptorium
     setReviewMarkMode,
     setRightTab,
     stageReferenceOutput,
+    register,
+    signIn,
+    signOut,
     tree,
     updateEditorText,
     updateSession,

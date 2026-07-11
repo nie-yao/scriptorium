@@ -26,7 +26,7 @@ cargo --version
 
 ## Current Flow
 
-1. Start on the Projects page, then create a project or open an existing folder under the workspace root.
+1. Create an account or sign in, then create a project in your private workspace.
 2. Select a project row to enter the editing workspace.
 3. Use the file tree to open `.tex`, `.bib`, `.cls`, `.sty`, or `.bst` files, or select a PDF for preview.
 4. Upload supported files, create folders, drag external files into the tree, or drag project entries to move them.
@@ -43,7 +43,7 @@ This workflow is intended for manual `thebibliography` projects. It does not rew
 
 ## Current Limits
 
-- Project creation from the web UI asks for a project name and creates it under the workspace root. Opening an existing project also requires a path inside that root.
+- The web app creates new projects in the authenticated user's private workspace. Importing an arbitrary server folder is intentionally not available in the hosted web flow.
 - AI generation is not wired to a provider yet. The app seeds a demo proposal and lets the user edit or paste proposed text manually.
 - Upload conflicts use `keep-both` from the web UI. The API also supports `error` and `replace` policies.
 - Active review sessions are kept in browser state. The local API can create/read session JSON, but the frontend does not persist review sessions yet.
@@ -58,3 +58,17 @@ apps/web/                  React + TypeScript + Vite frontend
 apps/local-server-rs/      Rust localhost HTTP API for projects, files, sessions, compile, logs, and PDFs
 sample-project/            runnable LaTeX project seeded into the local project index
 ```
+
+## Accounts and file storage
+
+The web app now requires an email/password account. Passwords are stored as Argon2 hashes, while browser sessions use an opaque `HttpOnly`, `SameSite=Strict` cookie. Every API request for a project, file, review session, PDF, log, or compilation is authorized against that session.
+
+By default, persistent account data is kept at `.scriptorium/data` beneath the server workspace. Each account has an isolated project directory:
+
+```text
+<data-root>/users/<user-id>/projects/
+```
+
+Set `SCRIPTORIUM_DATA_DIR` to a durable server volume before deployment, for example `SCRIPTORIUM_DATA_DIR=/var/lib/scriptorium`. Back up that directory independently of application releases; it contains account records, revocable sessions, project indexes, and uploaded files.
+
+Serve the application over HTTPS in production and set `SCRIPTORIUM_COOKIE_SECURE=true` so the session cookie is sent only over HTTPS. This MVP permits new registrations; put registration behind invitations, SSO, or an approved signup policy before opening it to the public.
