@@ -15,6 +15,8 @@ export type LatexNavigationKind =
   | "proposition"
   | "corollary"
   | "remark"
+  | "definition"
+  | "assumption"
   | "label";
 
 export interface LatexNavigationEntry {
@@ -31,7 +33,10 @@ type HeadingKind = Extract<
   "part" | "chapter" | "section" | "subsection" | "subsubsection" | "paragraph" | "subparagraph"
 >;
 type FloatKind = Extract<LatexNavigationKind, "figure" | "table" | "algorithm" | "listing">;
-type TheoremKind = Extract<LatexNavigationKind, "theorem" | "lemma" | "proposition" | "corollary" | "remark">;
+type TheoremKind = Extract<
+  LatexNavigationKind,
+  "theorem" | "lemma" | "proposition" | "corollary" | "remark" | "definition" | "assumption"
+>;
 
 const headingLevels: Record<HeadingKind, number> = {
   part: -1,
@@ -45,7 +50,7 @@ const headingLevels: Record<HeadingKind, number> = {
 const mathEnvironmentPattern = /\\(begin|end)\s*\{(equation\*?|align\*?|gather\*?|multline\*?|math|displaymath)\}/g;
 const floatBeginPattern = /\\begin\s*\{(figure|table|algorithm|listing)\}/;
 const floatEndPattern = /\\end\s*\{(figure|table|algorithm|listing)\}/g;
-const theoremBeginPattern = /\\begin\s*\{(theorem|lemma|proposition|corollary|remark)\*?\}/;
+const theoremBeginPattern = /\\begin\s*\{(theorem|lemma|proposition|corollary|remark|definition|assumption)\*?\}/;
 const labelPattern = /\\label\s*\{/g;
 const headingPattern = /\\(part|chapter|section|subsection|subsubsection|paragraph|subparagraph)\*?(?![A-Za-z@])/g;
 const captionPattern = /\\caption\*?\s*/g;

@@ -1,15 +1,17 @@
 import type { LatexNavigationEntry } from "@scriptorium/core";
 import { BookOpen, Braces, FileText, Image, ListTree, Table2 } from "lucide-react";
+import type { CSSProperties } from "react";
 
 interface DocumentNavigationProps {
   entries: LatexNavigationEntry[];
   selectedEntryId?: string | null;
   onSelectEntry: (entry: LatexNavigationEntry) => void;
+  style?: CSSProperties;
 }
 
-export function DocumentNavigation({ entries, selectedEntryId = null, onSelectEntry }: DocumentNavigationProps) {
+export function DocumentNavigation({ entries, selectedEntryId = null, onSelectEntry, style }: DocumentNavigationProps) {
   return (
-    <section className="documentNavigation" aria-label="Document navigation">
+    <section className="documentNavigation" aria-label="Document navigation" style={style}>
       <div className="documentNavigationTitle">
         <ListTree size={15} />
         <strong>Document</strong>
@@ -58,7 +60,9 @@ function navigationIcon(entry: LatexNavigationEntry) {
     entry.kind === "lemma" ||
     entry.kind === "proposition" ||
     entry.kind === "corollary" ||
-    entry.kind === "remark"
+    entry.kind === "remark" ||
+    entry.kind === "definition" ||
+    entry.kind === "assumption"
   ) {
     return BookOpen;
   }

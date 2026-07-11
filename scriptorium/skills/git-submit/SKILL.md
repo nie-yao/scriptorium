@@ -1,6 +1,6 @@
 ---
 name: git-submit
-description: Standard Git submission workflow for this project. Use when the user asks Codex to submit, commit, merge, publish, push, or release changes from dev to main, especially when they want a guarded flow that checks the current branch, stages changes, generates an English "type: summary" commit message, merges dev into main, pushes origin/main, and requires user confirmation before committing.
+description: "Standard Git submission workflow for this project. Use when the user asks Codex to submit, commit, merge, publish, push, or release changes from dev to main, especially when they want a guarded flow that checks the current branch, stages changes, generates an English 'type: summary' commit message, merges dev into main, pushes origin/main, and requires user confirmation before committing."
 ---
 
 # Git Submit
@@ -34,25 +34,20 @@ Use this skill to submit project changes through the `dev -> main -> origin/main
 5. Stop before committing.
    - Show the user all command outputs that matter: branch, status, diff stats, validation results, and any test/build results.
    - Show the proposed commit message.
-   - Ask for explicit confirmation before running `git commit`.
+   - Ask for one explicit confirmation that covers `git commit`, merging `dev` into `main`, and pushing `origin/main`.
    - Do not commit if the user has not clearly approved.
 
-6. After approval, commit.
+6. After approval, complete the submission without additional confirmation prompts.
    - Run `git commit -m "<generated message>"`.
-   - Show the commit output.
-
-7. Merge into `main`.
    - Run `git switch main`.
    - Ensure `main` tracks `origin/main`; if not, set it only after explaining the change.
    - Run `git merge dev`.
-   - If conflicts occur, stop and ask the user how to proceed after showing conflict details.
-
-8. Push `main`.
    - Run `git push origin main`.
-   - Show the push output.
-
-9. Return to `dev` when useful.
    - If the user normally works on `dev`, run `git switch dev` after a successful push.
+   - Run `git push origin main` after a successful merge.
+   - Return to `dev` after a successful push when the user normally works there.
+   - Show the commit, merge, push, and final-status outputs together when the flow finishes.
+   - Stop and ask for direction only if a merge conflict, a failed command, or a required tracking-branch change prevents completion.
    - Ensure `dev` does not track any remote branch if the project convention requires that.
 
 ## Safety Rules

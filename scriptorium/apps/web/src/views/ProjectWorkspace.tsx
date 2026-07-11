@@ -1,4 +1,5 @@
 import { ArrowLeft, BookOpen, FileCheck2, FolderPlus, PanelRight, Play, Save, SplitSquareHorizontal, Upload } from "lucide-react";
+import { useRef, useState } from "react";
 import type { ScriptoriumAppState } from "../app/useScriptoriumApp";
 import { DocumentNavigation } from "../components/DocumentNavigation";
 import { FileTree } from "../components/FileTree";
@@ -115,9 +116,26 @@ export function ProjectWorkspace({
   uploadFiles,
   uploadInputRef
 }: ProjectWorkspaceProps) {
+  const [documentPaneHeight, setDocumentPaneHeight] = useState<number | null>(null);
+  const sidebarRef = useRef<HTMLElement | null>(null);
+
+  function resizeDocumentPane(clientY: number) {
+    const sidebar = sidebarRef.current;
+    if (!sidebar) {
+      return;
+    }
+
+    const sidebarBounds = sidebar.getBoundingClientRect();
+    const fixedContentHeight = 68 + 42 + 52 + 8;
+    const availableHeight = sidebarBounds.height - fixedContentHeight;
+    const maximumDocumentHeight = Math.max(110, availableHeight - 120);
+    const requestedDocumentHeight = sidebarBounds.bottom - clientY;
+    setDocumentPaneHeight(Math.min(Math.max(requestedDocumentHeight, 110), maximumDocumentHeight));
+  }
+
   return (
     <main className="appShell">
-      <aside className="sidebar">
+      <aside className="sidebar" ref={sidebarRef}>
         <div className="brand">
           <FileCheck2 size={22} />
           <div>
@@ -159,10 +177,26 @@ export function ProjectWorkspace({
           onMoveEntry={moveEntry}
           onUploadFiles={uploadFiles}
         />
+        <button
+          className="sidebarResizeHandle"
+          type="button"
+          aria-label="Resize Document pane"
+          onPointerDown={(event) => {
+            event.currentTarget.setPointerCapture(event.pointerId);
+            resizeDocumentPane(event.clientY);
+          }}
+          onPointerMove={(event) => {
+            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+              resizeDocumentPane(event.clientY);
+            }
+          }}
+          onPointerUp={(event) => event.currentTarget.releasePointerCapture(event.pointerId)}
+        />
         <DocumentNavigation
           entries={navigationEntries}
           selectedEntryId={selectedNavigationEntryId}
           onSelectEntry={focusNavigationEntry}
+          style={documentPaneHeight === null ? undefined : { height: documentPaneHeight }}
         />
       </aside>
 

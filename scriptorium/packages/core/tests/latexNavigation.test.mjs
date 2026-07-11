@@ -17,6 +17,12 @@ const source = String.raw`% \section{Ignored}
 \begin{corollary}An immediate consequence.\end{corollary}
 \begin{remark}A useful observation.\end{remark}
 \begin{theorem*}[Starred result]\label{thm:starred}An unnumbered theorem.\end{theorem*}
+\begin{definition}[State space]\label{def:state}A named definition.\end{definition}
+\begin{definition}An unnamed definition.\end{definition}
+\begin{definition*}[Starred definition]A starred definition.\end{definition*}
+\begin{assumption}[Regularity]\label{ass:regularity}A regularity assumption.\end{assumption}
+\begin{assumption}An unnamed assumption.\end{assumption}
+\begin{assumption*}[Starred assumption]A starred assumption.\end{assumption*}
 \begin{equation}
 \label{eq:objective}
 \end{equation}`;
@@ -36,7 +42,13 @@ assert.deepEqual(
     { kind: "proposition", title: "Proposition", line: 12, level: 0 },
     { kind: "corollary", title: "Corollary", line: 13, level: 0 },
     { kind: "remark", title: "Remark", line: 14, level: 0 },
-    { kind: "theorem", title: "Starred result", line: 15, level: 0 }
+    { kind: "theorem", title: "Starred result", line: 15, level: 0 },
+    { kind: "definition", title: "State space", line: 16, level: 0 },
+    { kind: "definition", title: "Definition", line: 17, level: 0 },
+    { kind: "definition", title: "Starred definition", line: 18, level: 0 },
+    { kind: "assumption", title: "Regularity", line: 19, level: 0 },
+    { kind: "assumption", title: "Assumption", line: 20, level: 0 },
+    { kind: "assumption", title: "Starred assumption", line: 21, level: 0 }
   ]
 );
 
@@ -47,6 +59,28 @@ assert.deepEqual(
   [
     { title: "Compactness", label: "thm:compact" },
     { title: "Starred result", label: "thm:starred" }
+  ]
+);
+
+assert.deepEqual(
+  scanLatexNavigation(source)
+    .filter(({ kind }) => kind === "definition")
+    .map(({ title, label }) => ({ title, label })),
+  [
+    { title: "State space", label: "def:state" },
+    { title: "Definition", label: undefined },
+    { title: "Starred definition", label: undefined }
+  ]
+);
+
+assert.deepEqual(
+  scanLatexNavigation(source)
+    .filter(({ kind }) => kind === "assumption")
+    .map(({ title, label }) => ({ title, label })),
+  [
+    { title: "Regularity", label: "ass:regularity" },
+    { title: "Assumption", label: undefined },
+    { title: "Starred assumption", label: undefined }
   ]
 );
 

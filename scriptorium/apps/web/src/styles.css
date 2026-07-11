@@ -279,17 +279,35 @@ button:disabled {
 }
 
 .fileTree {
-  flex: 1 1 55%;
+  flex: 1 1 auto;
   min-height: 120px;
   overflow: auto;
   padding: 10px 0;
 }
 
-.documentNavigation {
+.sidebarResizeHandle {
+  background: transparent;
+  border: 0;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
+  cursor: row-resize;
+  flex: 0 0 8px;
+  min-height: 8px;
+  padding: 0;
+  touch-action: none;
+  width: 100%;
+}
+
+.sidebarResizeHandle:hover,
+.sidebarResizeHandle:focus-visible {
+  background: #79aaa5;
+  outline: 0;
+}
+
+.documentNavigation {
   display: grid;
-  flex: 0 1 45%;
+  flex: 0 0 auto;
   grid-template-rows: auto minmax(0, 1fr);
+  height: 45%;
   min-height: 110px;
   min-width: 0;
   overflow: hidden;
