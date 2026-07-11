@@ -117,6 +117,7 @@ export function ProjectWorkspace({
   uploadInputRef
 }: ProjectWorkspaceProps) {
   const [documentPaneHeight, setDocumentPaneHeight] = useState<number | null>(null);
+  const [documentNavigationCollapsed, setDocumentNavigationCollapsed] = useState(false);
   const sidebarRef = useRef<HTMLElement | null>(null);
 
   function resizeDocumentPane(clientY: number) {
@@ -177,25 +178,28 @@ export function ProjectWorkspace({
           onMoveEntry={moveEntry}
           onUploadFiles={uploadFiles}
         />
-        <button
-          className="sidebarResizeHandle"
-          type="button"
-          aria-label="Resize Document pane"
-          onPointerDown={(event) => {
-            event.currentTarget.setPointerCapture(event.pointerId);
-            resizeDocumentPane(event.clientY);
-          }}
-          onPointerMove={(event) => {
-            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        {!documentNavigationCollapsed && (
+          <button
+            className="sidebarResizeHandle"
+            type="button"
+            aria-label="Resize Document pane"
+            onPointerDown={(event) => {
+              event.currentTarget.setPointerCapture(event.pointerId);
               resizeDocumentPane(event.clientY);
-            }
-          }}
-          onPointerUp={(event) => event.currentTarget.releasePointerCapture(event.pointerId)}
-        />
+            }}
+            onPointerMove={(event) => {
+              if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                resizeDocumentPane(event.clientY);
+              }
+            }}
+            onPointerUp={(event) => event.currentTarget.releasePointerCapture(event.pointerId)}
+          />
+        )}
         <DocumentNavigation
           entries={navigationEntries}
           selectedEntryId={selectedNavigationEntryId}
           onSelectEntry={focusNavigationEntry}
+          onCollapsedChange={setDocumentNavigationCollapsed}
           style={documentPaneHeight === null ? undefined : { height: documentPaneHeight }}
         />
       </aside>

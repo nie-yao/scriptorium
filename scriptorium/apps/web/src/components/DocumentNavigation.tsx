@@ -6,21 +6,28 @@ interface DocumentNavigationProps {
   entries: LatexNavigationEntry[];
   selectedEntryId?: string | null;
   onSelectEntry: (entry: LatexNavigationEntry) => void;
+  onCollapsedChange?: (collapsed: boolean) => void;
   style?: CSSProperties;
 }
 
-export function DocumentNavigation({ entries, selectedEntryId = null, onSelectEntry, style }: DocumentNavigationProps) {
+export function DocumentNavigation({ entries, selectedEntryId = null, onSelectEntry, onCollapsedChange, style }: DocumentNavigationProps) {
   const [documentCollapsed, setDocumentCollapsed] = useState(false);
   const [collapsedEntryIds, setCollapsedEntryIds] = useState<Set<string>>(() => new Set());
   const visibleEntries = useMemo(() => visibleNavigationEntries(entries, collapsedEntryIds), [collapsedEntryIds, entries]);
 
   return (
-    <section className={`documentNavigation${documentCollapsed ? " collapsed" : ""}`} aria-label="Document navigation" style={style}>
+    <section className={`documentNavigation${documentCollapsed ? " collapsed" : ""}`} aria-label="Document navigation" style={documentCollapsed ? undefined : style}>
       <button
         className="documentNavigationTitle"
         type="button"
         aria-expanded={!documentCollapsed}
-        onClick={() => setDocumentCollapsed((current) => !current)}
+        onClick={() =>
+          setDocumentCollapsed((current) => {
+            const next = !current;
+            onCollapsedChange?.(next);
+            return next;
+          })
+        }
       >
         {documentCollapsed ? <ChevronRight aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
         <strong>Document</strong>
