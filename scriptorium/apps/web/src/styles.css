@@ -206,6 +206,7 @@ button:disabled {
 .appShell {
   display: grid;
   grid-template-columns: 248px minmax(720px, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   height: 100vh;
   overflow: hidden;
 }
@@ -393,6 +394,7 @@ button:disabled {
 .workspace {
   display: grid;
   grid-template-rows: 58px minmax(0, 1fr) 30px;
+  height: 100%;
   min-height: 0;
   min-width: 0;
   overflow: hidden;
@@ -454,6 +456,7 @@ button:disabled {
 .editorColumn {
   background: #ffffff;
   border-right: 1px solid #d8dde2;
+  min-height: 0;
   min-width: 0;
   overflow: hidden;
 }
