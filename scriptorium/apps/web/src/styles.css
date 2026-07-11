@@ -313,15 +313,35 @@ button:disabled {
   overflow: hidden;
 }
 
+.documentNavigation.collapsed {
+  grid-template-rows: auto;
+  height: auto;
+  min-height: 0;
+}
+
 .documentNavigationTitle {
   align-items: center;
+  background: transparent;
+  border: 0;
   color: #b7c2c9;
+  cursor: pointer;
   display: flex;
   font-size: 12px;
   gap: 7px;
   min-height: 38px;
   padding: 0 12px;
   text-transform: uppercase;
+}
+
+.documentNavigationTitle:hover:not(:disabled) {
+  border-color: transparent;
+  color: #dce5ea;
+}
+
+.documentNavigationTitle > svg:first-child {
+  flex: 0 0 18px;
+  height: 14px;
+  width: 14px;
 }
 
 .navigationEntries {
@@ -331,14 +351,84 @@ button:disabled {
 }
 
 .navigationRow {
+  align-items: center;
   background: transparent;
-  border: 0;
   border-radius: var(--corner-radius);
   color: #dce5ea;
-  justify-content: flex-start;
-  min-height: 31px;
+  display: flex;
+  font-size: 13px;
+  min-height: 29px;
+  position: relative;
   padding-right: 10px;
   width: 100%;
+}
+
+.navigationRowButton {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  display: flex;
+  flex: 1 1 auto;
+  font: inherit;
+  gap: 7px;
+  justify-content: flex-start;
+  min-height: 29px;
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+}
+
+.navigationRowButton.withoutIcon > span {
+  margin-left: 7px;
+}
+
+.navigationRowButton:hover:not(:disabled) {
+  border-color: transparent;
+  color: inherit;
+}
+
+.navigationToggle,
+.navigationTogglePlaceholder {
+  flex: 0 0 18px;
+  height: 18px;
+  width: 18px;
+}
+
+.navigationToggle {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  display: inline-flex;
+  justify-content: center;
+  min-height: 18px;
+  padding: 0;
+}
+
+.navigationToggle:hover:not(:disabled) {
+  border-color: transparent;
+  color: inherit;
+}
+
+.navigationToggle svg {
+  height: 14px;
+  width: 14px;
+}
+
+.navigationIcon {
+  flex: 0 0 16px;
+  height: 16px;
+  margin-left: 7px;
+  width: 16px;
+}
+
+.navigationGuide {
+  background: rgba(220, 229, 234, 0.6);
+  bottom: 0;
+  position: absolute;
+  top: 0;
+  width: 1px;
 }
 
 .navigationRow:hover {

@@ -31,24 +31,24 @@ assert.deepEqual(
   scanLatexNavigation(source).map(({ kind, title, line, level }) => ({ kind, title, line, level })),
   [
     { kind: "chapter", title: "Methods", line: 1, level: 0 },
-    { kind: "section", title: "Model % Setup", line: 2, level: 1 },
-    { kind: "subsection", title: "Objective", line: 3, level: 2 },
-    { kind: "figure", title: "System overview", line: 4, level: 0 },
-    { kind: "table", title: "Results", line: 7, level: 0 },
-    { kind: "algorithm", title: "Training", line: 8, level: 0 },
-    { kind: "label", title: "appendix:extra", line: 9, level: 0 },
-    { kind: "theorem", title: "Compactness", line: 10, level: 0 },
-    { kind: "lemma", title: "Lemma", line: 11, level: 0 },
-    { kind: "proposition", title: "Proposition", line: 12, level: 0 },
-    { kind: "corollary", title: "Corollary", line: 13, level: 0 },
-    { kind: "remark", title: "Remark", line: 14, level: 0 },
-    { kind: "theorem", title: "Starred result", line: 15, level: 0 },
-    { kind: "definition", title: "State space", line: 16, level: 0 },
-    { kind: "definition", title: "Definition", line: 17, level: 0 },
-    { kind: "definition", title: "Starred definition", line: 18, level: 0 },
-    { kind: "assumption", title: "Regularity", line: 19, level: 0 },
-    { kind: "assumption", title: "Assumption", line: 20, level: 0 },
-    { kind: "assumption", title: "Starred assumption", line: 21, level: 0 }
+    { kind: "section", title: "Model % Setup", line: 2, level: 0 },
+    { kind: "subsection", title: "Objective", line: 3, level: 1 },
+    { kind: "figure", title: "Figure 1: System overview", line: 4, level: 2 },
+    { kind: "table", title: "Table 1: Results", line: 7, level: 2 },
+    { kind: "algorithm", title: "Algorithm 1: Training", line: 8, level: 2 },
+    { kind: "label", title: "Label 1: appendix:extra", line: 9, level: 2 },
+    { kind: "theorem", title: "Theorem 1: Compactness", line: 10, level: 2 },
+    { kind: "lemma", title: "Lemma 1", line: 11, level: 2 },
+    { kind: "proposition", title: "Proposition 1", line: 12, level: 2 },
+    { kind: "corollary", title: "Corollary 1", line: 13, level: 2 },
+    { kind: "remark", title: "Remark 1", line: 14, level: 2 },
+    { kind: "theorem", title: "Theorem 2: Starred result", line: 15, level: 2 },
+    { kind: "definition", title: "Definition 1: State space", line: 16, level: 2 },
+    { kind: "definition", title: "Definition 2", line: 17, level: 2 },
+    { kind: "definition", title: "Definition 3: Starred definition", line: 18, level: 2 },
+    { kind: "assumption", title: "Assumption 1: Regularity", line: 19, level: 2 },
+    { kind: "assumption", title: "Assumption 2", line: 20, level: 2 },
+    { kind: "assumption", title: "Assumption 3: Starred assumption", line: 21, level: 2 }
   ]
 );
 
@@ -57,8 +57,8 @@ assert.deepEqual(
     .filter(({ kind }) => kind === "theorem")
     .map(({ title, label }) => ({ title, label })),
   [
-    { title: "Compactness", label: "thm:compact" },
-    { title: "Starred result", label: "thm:starred" }
+    { title: "Theorem 1: Compactness", label: "thm:compact" },
+    { title: "Theorem 2: Starred result", label: "thm:starred" }
   ]
 );
 
@@ -67,9 +67,9 @@ assert.deepEqual(
     .filter(({ kind }) => kind === "definition")
     .map(({ title, label }) => ({ title, label })),
   [
-    { title: "State space", label: "def:state" },
-    { title: "Definition", label: undefined },
-    { title: "Starred definition", label: undefined }
+    { title: "Definition 1: State space", label: "def:state" },
+    { title: "Definition 2", label: undefined },
+    { title: "Definition 3: Starred definition", label: undefined }
   ]
 );
 
@@ -78,10 +78,52 @@ assert.deepEqual(
     .filter(({ kind }) => kind === "assumption")
     .map(({ title, label }) => ({ title, label })),
   [
-    { title: "Regularity", label: "ass:regularity" },
-    { title: "Assumption", label: undefined },
-    { title: "Starred assumption", label: undefined }
+    { title: "Assumption 1: Regularity", label: "ass:regularity" },
+    { title: "Assumption 2", label: undefined },
+    { title: "Assumption 3: Starred assumption", label: undefined }
   ]
+);
+
+const decoratedTitles = String.raw`\section{Overview \label{sec:overview} [\cite{overview}]}
+\begin{figure}\caption{Architecture \label{fig:architecture} [\cite{architecture}]}\end{figure}
+\begin{theorem}[Convergence \label{thm:convergence} [\cite{convergence}]]\end{theorem}`;
+
+assert.deepEqual(
+  scanLatexNavigation(decoratedTitles)
+    .filter(({ kind }) => kind !== "label")
+    .map(({ kind, title }) => ({ kind, title })),
+  [
+    { kind: "section", title: "Overview" },
+    { kind: "figure", title: "Figure 1: Architecture" },
+    { kind: "theorem", title: "Theorem 1: Convergence" }
+  ]
+);
+
+const nestedContent = String.raw`\section{Overview}
+\begin{figure}\caption{Architecture}\end{figure}
+\subsection{Method}
+\begin{theorem}[Convergence]\end{theorem}`;
+
+assert.deepEqual(
+  scanLatexNavigation(nestedContent).map(({ kind, level }) => ({ kind, level })),
+  [
+    { kind: "section", level: 0 },
+    { kind: "figure", level: 1 },
+    { kind: "subsection", level: 1 },
+    { kind: "theorem", level: 2 }
+  ]
+);
+
+const starredFigure = String.raw`\section{Overview}
+\begin{figure*}
+\caption{Wide architecture}
+\label{fig:wide-left}
+\label{fig:wide-right}
+\end{figure*}`;
+
+assert.deepEqual(
+  scanLatexNavigation(starredFigure).map(({ kind, title, label }) => ({ kind, title, label })),
+  [{ kind: "section", title: "Overview", label: undefined }, { kind: "figure", title: "Figure 1: Wide architecture", label: "fig:wide-right" }]
 );
 
 console.log("LaTex navigation tests passed");

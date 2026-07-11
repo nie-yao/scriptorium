@@ -41,15 +41,15 @@ type TheoremKind = Extract<
 const headingLevels: Record<HeadingKind, number> = {
   part: -1,
   chapter: 0,
-  section: 1,
-  subsection: 2,
-  subsubsection: 3,
-  paragraph: 4,
-  subparagraph: 5
+  section: 0,
+  subsection: 1,
+  subsubsection: 2,
+  paragraph: 3,
+  subparagraph: 4
 };
 const mathEnvironmentPattern = /\\(begin|end)\s*\{(equation\*?|align\*?|gather\*?|multline\*?|math|displaymath)\}/g;
-const floatBeginPattern = /\\begin\s*\{(figure|table|algorithm|listing)\}/;
-const floatEndPattern = /\\end\s*\{(figure|table|algorithm|listing)\}/g;
+const floatBeginPattern = /\\begin\s*\{(figure|table|algorithm|listing)\*?\}/;
+const floatEndPattern = /\\end\s*\{(figure|table|algorithm|listing)\*?\}/g;
 const theoremBeginPattern = /\\begin\s*\{(theorem|lemma|proposition|corollary|remark|definition|assumption)\*?\}/;
 const labelPattern = /\\label\s*\{/g;
 const headingPattern = /\\(part|chapter|section|subsection|subsubsection|paragraph|subparagraph)\*?(?![A-Za-z@])/g;
@@ -82,6 +82,7 @@ export function scanLatexNavigation(text: string): LatexNavigationEntry[] {
   let pendingHeading: PendingHeading | undefined;
   let activeFloat: ActiveFloat | undefined;
   let activeTheorem: ActiveTheorem | undefined;
+  let currentHeadingLevel = headingLevels.section;
 
   for (const [line, rawLine] of text.split(/\r?\n/).entries()) {
     const sourceLine = stripComment(rawLine);
@@ -111,6 +112,7 @@ export function scanLatexNavigation(text: string): LatexNavigationEntry[] {
     if (heading) {
       const entry = createEntry(entries, heading.kind, heading.title, line, headingLevels[heading.kind]);
       entries.push(entry);
+      currentHeadingLevel = entry.level;
       const sameLineLabel = labels.find((label) => label.start >= heading.end);
       if (sameLineLabel) {
         entry.label = sameLineLabel.value;
@@ -123,7 +125,7 @@ export function scanLatexNavigation(text: string): LatexNavigationEntry[] {
     const floatBegin = sourceLine.match(floatBeginPattern);
     if (floatBegin) {
       const kind = floatBegin[1] as FloatKind;
-      const entry = createEntry(entries, kind, fallbackFloatTitle(kind), line, 0);
+      const entry = createEntry(entries, kind, fallbackFloatTitle(kind), line, currentHeadingLevel + 1);
       entries.push(entry);
       activeFloat = { entry, kind, source: sourceLine };
     } else if (activeFloat) {
@@ -144,7 +146,7 @@ export function scanLatexNavigation(text: string): LatexNavigationEntry[] {
 
     const theoremBegin = findTheoremBegin(sourceLine);
     if (theoremBegin) {
-      const entry = createEntry(entries, theoremBegin.kind, theoremBegin.title, line, 0);
+      const entry = createEntry(entries, theoremBegin.kind, theoremBegin.title, line, currentHeadingLevel + 1);
       entries.push(entry);
       activeTheorem = { entry, kind: theoremBegin.kind };
     }
@@ -165,7 +167,7 @@ export function scanLatexNavigation(text: string): LatexNavigationEntry[] {
 
     for (const label of labels) {
       if (!consumedLabels.has(label.value)) {
-        entries.push(createEntry(entries, "label", label.value, line, 0, label.value));
+        entries.push(createEntry(entries, "label", label.value, line, currentHeadingLevel + 1, label.value));
       }
     }
 
@@ -177,7 +179,33 @@ export function scanLatexNavigation(text: string): LatexNavigationEntry[] {
     }
   }
 
-  return entries;
+  return prefixNonHeadingEntries(entries);
+}
+
+function prefixNonHeadingEntries(entries: LatexNavigationEntry[]): LatexNavigationEntry[] {
+  const counts = new Map<LatexNavigationKind, number>();
+
+  return entries.map((entry) => {
+    if (isHeading(entry.kind)) {
+      return entry;
+    }
+    const number = (counts.get(entry.kind) ?? 0) + 1;
+    counts.set(entry.kind, number);
+    const prefix = navigationPrefix(entry.kind);
+    const fallbackTitle = entry.kind[0].toUpperCase() + entry.kind.slice(1);
+    return {
+      ...entry,
+      title: entry.title === fallbackTitle ? `${prefix} ${number}` : `${prefix} ${number}: ${entry.title}`
+    };
+  });
+}
+
+function isHeading(kind: LatexNavigationKind): kind is HeadingKind {
+  return kind in headingLevels;
+}
+
+function navigationPrefix(kind: Exclude<LatexNavigationKind, HeadingKind>): string {
+  return kind[0].toUpperCase() + kind.slice(1);
 }
 
 function createEntry(
@@ -316,7 +344,17 @@ function skipWhitespace(source: string, index: number): number {
 }
 
 function displayTitle(value: string): string {
-  return value.replace(/\\%/g, "%").replace(/\s+/g, " ").trim();
+  let title = value.replace(/\\%/g, "%").replace(/\s+/g, " ").trim();
+  let previousTitle: string | undefined;
+  while (title !== previousTitle) {
+    previousTitle = title;
+    title = title
+      .replace(/\s*\\label\s*\{(?:[^{}]|\{[^{}]*\})*\}\s*$/, "")
+      .replace(/\s*\[\s*\\cite[a-zA-Z*]*\s*(?:\[[^\]]*\]\s*)*\{(?:[^{}]|\{[^{}]*\})*\}\s*\]\s*$/, "")
+      .replace(/\s*\\cite[a-zA-Z*]*\s*(?:\[[^\]]*\]\s*)*\{(?:[^{}]|\{[^{}]*\})*\}\s*$/, "")
+      .trim();
+  }
+  return title;
 }
 
 function fallbackFloatTitle(kind: FloatKind): string {
